@@ -4,7 +4,7 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "SCP Demonstration",
+    Name = "SCP Demonstration by Ali",
     LoadingTitle = "SCP Demo GUI",
     LoadingSubtitle = "by Ali",
     ShowText = "SCP:D",
@@ -17,7 +17,6 @@ local visualTab = Window:CreateTab("Visual")
 local plrTab = Window:CreateTab("Player")
 local bindsTab = Window:CreateTab("Shortcuts")
 local settingsTab = Window:CreateTab("Debug")
---local espSection = visualTab:CreateSection("Esp")
 
 ----------------------------------------------------
 local Players = game.Players
@@ -340,7 +339,7 @@ local jp = plrTab:CreateSlider({
     end
 })
 
-----------------------
+-----------------------------------------------
 
 local iy = settingsTab:CreateButton({
     Name = "Infinite Yield",
