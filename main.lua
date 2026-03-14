@@ -46,7 +46,7 @@ end
 
 local function reset()
     local char = plr.Character or plr.CharacterAdded:Wait()
-    local humanoid = char.Humanoid
+    local humanoid = char:FindFirstChild("Humanoid")
     if humanoid then
         humanoid:ChangeState(Enum.HumanoidStateType.Dead)
     elseif char then
