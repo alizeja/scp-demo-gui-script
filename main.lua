@@ -348,6 +348,11 @@ local iy = settingsTab:CreateButton({
     end
 })
 
+local re = settingsTab:CreateButton({
+	Name = "Reset",
+	Callback = reset()
+})
+
 local rj = settingsTab:CreateButton({
     Name = "Rejoin",
     Callback = function()
