@@ -350,7 +350,9 @@ local iy = settingsTab:CreateButton({
 
 local re = settingsTab:CreateButton({
 	Name = "Reset",
-	Callback = reset()
+	Callback = function()
+		reset()
+	end
 })
 
 local rj = settingsTab:CreateButton({
