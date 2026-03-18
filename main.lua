@@ -125,12 +125,6 @@ local function exit(child)
 	return (child:IsA("BasePart") and (child.Name == "Front" or child.Name == "HCZ") and (child.Parent.Name == "CheckptA" or child.Parent.Name == "CheckptB" or child.Parent.Name == "914" or child.Parent.Name == "South HCZ-EZ Checkpoint" or child.Parent.Name == "North HCZ-EZ Checkpoint" or child.Parent.Name == "GateA" or child.Parent.Name == "GateB" or child.Parent.Name == "Warhead" or child.Parent.Name == "049"))
 end
 
-local function worldPosToScreen(pos)
-    local s, v = Camera:WorldToViewportPoint(pos)
-    
-	return Vector2.new(s.X, s.Y), v
-end
-
 local circl = Drawing.new("Circle")
 circl.Radius = 200
 circl.Visible = false
@@ -196,8 +190,6 @@ local function GetClosestHead()
 		local char = data.Character
 
 		if head and char and not isDead(player) then
-			
-			-- SCREEN CHECK FIRST (cheap)
 			local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
 			if not onScreen then continue end
 
@@ -205,7 +197,6 @@ local function GetClosestHead()
 			local mag = (screenPos - circl.Position).Magnitude
 			if mag > dist then continue end
 
-			-- RAYCAST LAST (expensive)
 			local origin = localHead.Position
 			local direction = head.Position - origin
 
