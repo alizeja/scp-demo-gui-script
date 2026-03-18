@@ -50,6 +50,10 @@ function notif(text, title, dur)
     })
 end
 
+local function sameTeam(plr)
+    return plr.Team == localplr.Team
+end
+
 local function isDead(plr)
 	local plrchar = plr.Character or plr.CharacterAdded:Wait()
 	local humanoid = plrchar:FindFirstChildWhichIsA("Humanoid")
@@ -187,6 +191,7 @@ local function GetClosestHead()
 	local dist = circl.Radius
 
 	for player, data in pairs(trackedPlayers) do
+        if sameTeam(player) then continue end
 		local head = data.Head
 		local char = data.Character
 
