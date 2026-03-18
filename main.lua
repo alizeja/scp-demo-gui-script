@@ -556,7 +556,7 @@ RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, func
     local velocity = currentTarget.AssemblyLinearVelocity
     local predictedPos = currentTarget.Position + velocity * 0.05
 
-	local targetDir = (smoothedTargetPos - camPos).Unit
+	local targetDir = (predictedPos - camPos).Unit
 	local currentDir = camCF.LookVector
     local diff = (targetDir - currentDir).Magnitude
     if diff < dz then
