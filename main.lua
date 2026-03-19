@@ -276,8 +276,6 @@ workspace.ChildAdded:Connect(function()
 	end
 end)
 
-localplr.CharacterAdded
-
 ------------------------------------------------------------------
 
 local itemEsp = visualTab:CreateToggle({
