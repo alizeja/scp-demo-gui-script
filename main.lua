@@ -493,13 +493,7 @@ local shyguylabel = teamTab:CreateLabel(
     Color3.new(),
     false
 )
-print(shyguygui.Name)
-for i, child in shyguygui:GetChildren() do
-	print(child.Name)
-end
-print(shyguygui.Required.TextTransparency)
 if shyguygui.Required.TextTransparency == 0 then
-	print("shyguy gamepass required!")
 	shyguylabel:Set("SCP-096 Shy Guy: Gamepass Required")
 end
 local oldmanlabel = teamTab:CreateLabel(
