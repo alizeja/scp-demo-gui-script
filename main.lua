@@ -35,12 +35,15 @@ local flashfx = localplr.PlayerGui.FlashFx
 
 local iesp = false
 local noshyguy = false
+local fastoldman = false
 local silentaimbot = false
 
 local espelem = {}
 local exitelem = {}
 
 local runLoop
+
+---------------------FUNCS AND CONNECTIONS
 
 function notif(text, title, dur)
     Rayfield:Notify({
@@ -51,7 +54,26 @@ function notif(text, title, dur)
 end
 
 local function sameTeam(plr)
-    return plr.Team == localplr.Team
+    local localteam = localplr.Team
+	local plrteam = plr.Team
+
+	if plrteam == localteam then
+		return true
+	end
+	if localteam.Name == "Class D" or localteam.Name == "Chaos Insurgency" then
+		if plrteam.Name == "Class D" or plrteam.Name == "Chaos Insurgency" then
+			return true
+		else
+			return false
+		end
+	end
+	if localteam.Name == "Scientist" or localteam.Name == "Mobile Task Force" then
+		if plrteam.Name == "Scientist" or plrteam.Name == "Mobile Task Force" then
+			return true
+		else
+			return false
+		end
+	end
 end
 
 local function isDead(plr)
@@ -74,6 +96,23 @@ local function reset()
         notif("idk wtf happened but you cant reset")
     end
 end
+
+local function makefast(char)
+	if fastoldman ~= true and localplr.Team.Name ~= "SCP" then return end
+	local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+	if humanoid then
+		humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+			if humanoid.WalkSpeed == 2.75 or humanoid.WalkSpeed == 16.5 then return end
+			if humanoid.WalkSpeed <= 1.5 then
+				humanoid.WalkSpeed = 2.75
+			elseif humanoid.WalkSpeed <= 15 then
+				humanoid.WalkSpeed = 16.5
+			end
+		end)
+	end
+end
+
+localplr.CharacterAdded:Connect(makefast)
 
 local function find(child)
 	if child:IsA("Tool") then
@@ -236,6 +275,10 @@ workspace.ChildAdded:Connect(function()
 		end
 	end
 end)
+
+localplr.CharacterAdded
+
+------------------------------------------------------------------
 
 local itemEsp = visualTab:CreateToggle({
     Name = "Item Esp",
@@ -401,6 +444,15 @@ local noShyGuy = mainTab:CreateToggle({
     end
 })
 
+local fasterOldMan = mainTab:CreateToggle({
+		Name = "Faster 106 Door Movement",
+		CurrentValue = false,
+		Callback = function(Value)
+			fastoldman = Value
+			makefast(localplr.Character)
+		end
+})
+
 local disablefdmg = mainTab:CreateButton({
     Name = "Disable Fall Damage",
     Callback = function()
@@ -523,6 +575,8 @@ local destroy = settingsTab:CreateButton({
         Rayfield:Destroy()
     end
 })
+
+
 
 ---------LOOOP!!!!
 local currentTarget = nil
