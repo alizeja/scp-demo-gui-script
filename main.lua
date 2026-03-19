@@ -558,6 +558,8 @@ local rj = settingsTab:CreateButton({
 local destroy = settingsTab:CreateButton({
     Name = "Destroy GUI/Panic",
     Callback = function()
+		print("Destroying...")
+		notif("Destroying...")
         itemEsp:Set(false)
         findRooms:Set(false)
         noFlash:Set(false)
@@ -577,6 +579,7 @@ local destroy = settingsTab:CreateButton({
 local rescript = settingsTab:CreateButton({
 	Name = "Reload Script",
 	Callback = function()
+		print("Reloading...")
 		destroy:Set("Destroy GUI/Panic")
 		task.wait(.5)
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/alizeja/scp-demo-gui-script/refs/heads/main/main.lua"))()
