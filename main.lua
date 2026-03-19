@@ -483,7 +483,7 @@ local mtflabel = teamTab:CreateLabel(
     false
 )
 if mtfgui.Required.TextTransparency == 0 then
-	mtfgui:Set("Mobile Task Force: Badge Required")
+	mtflabel:Set("Mobile Task Force: Badge Required")
 end
 
 local scpssection = teamTab:CreateSection("SCPs")
@@ -512,7 +512,7 @@ local doclabel = teamTab:CreateLabel(
     false
 )
 if docgui.Required.TextTransparency == 0 then
-	docgui:Set("SCP-049 Plague Doctor: Gamepass Required")
+	doclabel:Set("SCP-049 Plague Doctor: Gamepass Required")
 end
 local doglabel = teamTab:CreateLabel(
     "SCP-939-53 With Many Voices: "..tostring(doggui.Timer.Text),
