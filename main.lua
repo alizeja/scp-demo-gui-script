@@ -576,6 +576,15 @@ local destroy = settingsTab:CreateButton({
     end
 })
 
+local rescript = settingsTab:CreateButton({
+	Name = "Reload Script",
+	Callback = function()
+		destroy:Set("Destroy GUI/Panic")
+		task.wait(.5)
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/alizeja/scp-demo-gui-script/refs/heads/main/main.lua"))()
+	end	
+})
+
 
 
 ---------LOOOP!!!!
