@@ -694,7 +694,7 @@ local function destroyrayfield()
     for i, connection in endconnections do
         connection:Disconnect()
     end
-    task.wait(.5)
+    task.wait(1.5)
     Rayfield:Destroy()
 end
 
