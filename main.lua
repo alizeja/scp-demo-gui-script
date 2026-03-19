@@ -1,5 +1,6 @@
 ---------pleaseee dont look at my code, it's spaghetti
 
+if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -14,15 +15,17 @@ local Window = Rayfield:CreateWindow({
 
 local mainTab = Window:CreateTab("Main")
 local visualTab = Window:CreateTab("Visual")
+local teamTab = Window:CreateTab("Team")
 local plrTab = Window:CreateTab("Player")
 local bindsTab = Window:CreateTab("Shortcuts")
 local settingsTab = Window:CreateTab("Debug")
 
 ----------------------------------------------------
-local Players = game.Players
+local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local RunService = game:GetService("RunService")
-local Lighting = game.Lighting
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 PlaceId, JobId = game.PlaceId, game.JobId
 
@@ -30,7 +33,7 @@ local Camera = workspace.CurrentCamera
 
 local localplr = Players.LocalPlayer
 local cframe = CFrame.new(1.53290033, 1.97216606, -0.825374484, 0.982948065, -0.171378091, -0.0666531026, 0.0773534179, 0.714215279, -0.695638537, 0.166821882, 0.678620696, 0.715293169)
-local falldmg = game:GetService("ReplicatedStorage").PVP:FindFirstChild("FallDamage")
+local falldmg = ReplicatedStorage.PVP:FindFirstChild("FallDamage")
 local flashfx = localplr.PlayerGui.FlashFx
 
 local iesp = false
@@ -42,6 +45,7 @@ local espelem = {}
 local exitelem = {}
 
 local runLoop
+local endconnections = {}
 
 ---------------------FUNCS AND CONNECTIONS
 
@@ -259,6 +263,44 @@ local function GetClosestHead()
 	return closest
 end
 
+local chaosgui
+local mtfgui
+local shyguygui
+local oldmangui
+local docgui
+local doggui
+local dogagaingui
+
+local buttons = localplr.PlayerGui.MenuGui.MainFrame.Teams.TeamButtons
+local playerTeams = buttons.Other
+local scpTeams = buttons.SCPs
+
+local queuegui = buttons.Parent.QueuedText
+
+for i, frame in playerTeams:GetChildren() do
+    if not frame:IsA("Frame") then continue end
+    if frame.Button.Image == "rbxassetid://14263777415" then
+        chaosgui = frame
+    elseif frame.Button.Image == "rbxassetid://6774779934" then
+        mtfgui = frame
+    end
+end
+for i, frame in scpTeams:GetChildren() do
+    if not frame:IsA("Frame") then continue end
+    if frame.Button.Image == "rbxassetid://14263837581" then
+        shyguygui = frame
+    elseif frame.Button.Image == "rbxassetid://9606026315" then
+        oldmangui = frame
+    elseif frame.Button.Image == "rbxassetid://130261444621233" then
+        docgui = frame
+    elseif frame.Button.Image == "rbxassetid://17660598360" then
+        doggui = frame
+    elseif frame.Button.Image == "rbxassetid://10563151614" then
+        dogagaingui = frame
+    end
+end
+
+
 workspace.ChildAdded:Connect(function()
 	for i, child in workspace:GetChildren() do
 		if iesp then
@@ -275,24 +317,6 @@ workspace.ChildAdded:Connect(function()
 		end
 	end
 end)
-
-local function destroyrayfield()
-    print("Destroying...")
-	notif("Destroying...")
-    itemEsp:Set(false)
-    findRooms:Set(false)
-    noFlash:Set(false)
-    noShyGuy:Set(false)
-    ws:Set(15)
-    jp:Set(3)
-    silentaimbot = false
-    circl:Destroy()
-	if runLoop == true then
-        RunService:UnbindFromRenderStep("Aimbot") 
-    end
-    task.wait(.5)
-    Rayfield:Destroy()
-end
 
 ------------------------------------------------------------------
 
@@ -319,7 +343,7 @@ local noFlash = visualTab:CreateToggle({
     Callback = function(Value)
         if Value == true then
             if localplr.PlayerGui:FindFirstChild("FlashFx") then
-                flashfx.Parent = game.ReplicatedStorage
+                flashfx.Parent = ReplicatedStorage
             end
         else
             flashfx.Parent = localplr.PlayerGui
@@ -421,6 +445,7 @@ local ballk = bindsTab:CreateKeybind({
         local char = localplr.Character or localplr.CharacterAdded:Wait()
 		local hrp = char.HumanoidRootPart
 		local backpack = localplr.Backpack
+
 		local ball = backpack:FindFirstChild("SCP-018")
 		if ball then
 			ball.Parent = char
@@ -431,6 +456,62 @@ local ballk = bindsTab:CreateKeybind({
 		end
     end
 })
+
+
+local queuedsection = teamTab:CreateSection("Queue")
+local queuelabel = teamTab:CreateLabel("Queued: None")
+if queuegui.Text == nil or queuegui.Text == " " then
+    queuelabel:Set(queuegui.Text)
+else
+    queuelabel:Set("Queued: None")
+end
+
+local playerteamsection = teamTab:CreateSection("Player Teams")
+local chaoslabel = teamTab:CreateLabel(
+    "Chaos Insurgency: "..tostring(chaosgui.Timer.Text),
+    14263777415,
+    Color3.new(),
+    false
+)
+local mtflabel = teamTab:CreateLabel(
+    "Mobile Task Force: "..tostring(mtfgui.Timer.Text),
+    6774779934,
+    Color3.new(),
+    false
+)
+
+local scpssection = teamTab:CreateSection("SCPs")
+local shyguylabel = teamTab:CreateLabel(
+    "SCP-096 Shy Guy: "..tostring(shyguygui.Timer.Text),
+    14263837581,
+    Color3.new(),
+    false
+)
+local oldmanlabel = teamTab:CreateLabel(
+    "SCP-106 Old Man: "..tostring(oldmangui.Timer.Text),
+    9606026315,
+    Color3.new(),
+    false
+)
+local doclabel = teamTab:CreateLabel(
+    "SCP-049 Plague Doctor: "..tostring(docgui.Timer.Text),
+    130261444621233,
+    Color3.new(),
+    false
+)
+local doglabel = teamTab:CreateLabel(
+    "SCP-939-53 With Many Voices: "..tostring(doggui.Timer.Text),
+    17660598360,
+    Color3.new(),
+    false
+)
+local dogagainlabel = teamTab:CreateLabel(
+    "SCP-939-89 With Many Voices: "..tostring(dogagaingui.Timer.Text),
+    10563151614,
+    Color3.new(),
+    false
+)
+
 
 local toggleaimbot = mainTab:CreateDropdown({
 	Name = "Aimbot (Buggy)",
@@ -563,6 +644,7 @@ local rj = settingsTab:CreateButton({
     Name = "Rejoin",
     Callback = function()
         notif("Rejoining...")
+        queue_on_teleport([[loadstring(game:HttpGet("https://raw.githubusercontent.com/alizeja/scp-demo-gui-script/refs/heads/main/main.lua"))()]])
         if #Players:GetPlayers() <= 1 then
 		    Players.LocalPlayer:Kick("\nRejoining...")
 		    wait()
@@ -572,6 +654,27 @@ local rj = settingsTab:CreateButton({
 	    end
     end
 })
+
+local function destroyrayfield()
+    print("Destroying...")
+	notif("Destroying...")
+    itemEsp:Set(false)
+    findRooms:Set(false)
+    noFlash:Set(false)
+    noShyGuy:Set(false)
+    ws:Set(15)
+    jp:Set(3)
+    silentaimbot = false
+    circl:Destroy()
+	if runLoop == true then
+        RunService:UnbindFromRenderStep("Aimbot") 
+    end
+    for i, connection in endconnections do
+        connection:Disconnect()
+    end
+    task.wait(.5)
+    Rayfield:Destroy()
+end
 
 local destroy = settingsTab:CreateButton({
     Name = "Destroy GUI/Panic",
@@ -592,7 +695,46 @@ local rescript = settingsTab:CreateButton({
 
 
 
----------LOOOP!!!!
+---------LOOOP and END CONNECTIONS!!!!
+
+
+local qgc = queuegui:GetPropertyChangedSignal("Text"):Connect(function()
+    if queuegui.Text == nil or queuegui.Text == " " then
+        queuelabel:Set(queuegui.Text)
+    else
+        queuelabel:Set("Queued: None")
+    end
+end)
+table.insert(endconnections, qgc)
+local cgc = chaosgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    chaoslabel:Set("Chaos Insurgency: "..tostring(chaosgui.Timer.Text))
+end)
+table.insert(endconnections, cgc)
+local mtfgc = mtfgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    mtflabel:Set("Mobile Task Force: "..tostring(mtfgui.Timer.Text))
+end)
+table.insert(endconnections, mtfgc)
+local sggc = shyguygui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    shyguylabel:Set("SCP-096 Shy Guy: "..tostring(shyguygui.Timer.Text))
+end)
+table.insert(endconnections, sggc)
+local omgc = oldmangui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    oldmanlabel:Set("SCP-106 Old Man: "..tostring(oldmangui.Timer.Text))
+end)
+table.insert(endconnections, omgc)
+local pdgc = docgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    doclabel:Set("SCP-049 Plague Doctor: "..tostring(docgui.Timer.Text))
+end)
+table.insert(endconnections, pdgc)
+local dgc = doggui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    doglabel:Set("SCP-939-53 With Many Voices: "..tostring(doggui.Timer.Text))
+end)
+table.insert(endconnections, dgc)
+local dagc = dogagaingui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    dogagainlabel:Set("SCP-939-89 With Many Voices: "..tostring(dogagaingui.Timer.Text))
+end)
+table.insert(endconnections, dagc)
+
 local currentTarget = nil
 local dz = 0.004
 
