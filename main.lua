@@ -644,7 +644,6 @@ local rj = settingsTab:CreateButton({
     Name = "Rejoin",
     Callback = function()
         notif("Rejoining...")
-        queue_on_teleport([[loadstring(game:HttpGet("https://raw.githubusercontent.com/alizeja/scp-demo-gui-script/refs/heads/main/main.lua"))()]])
         if #Players:GetPlayers() <= 1 then
 		    Players.LocalPlayer:Kick("\nRejoining...")
 		    wait()
