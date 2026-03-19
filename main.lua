@@ -542,7 +542,6 @@ local toggleaimbot = mainTab:CreateDropdown({
 	Callback = function(Options)
 		silentaimbot = (Options[1] == "Toggle On/Off" or Options[2] == "Toggle On/Off")
 		circl.Visible = (Options[1] == "Circle" or Options[2] == "Circle")
-		print("silent aimbot: "..tostring(silentaimbot)..", circle: "..tostring(circl.Visible))
 	end
 })
 
@@ -744,7 +743,7 @@ end)
 table.insert(endconnections, mtfgc)
 local sggc = shyguygui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
 	if shyguygui.Required.TextTransparency == 0 then
-		shyguylabel:Set("SCP-096 Shy Guy: "....tostring(shyguygui.Timer.Text).." (Gamepass Required)")
+		shyguylabel:Set("SCP-096 Shy Guy: "..tostring(shyguygui.Timer.Text).." (Gamepass Required)")
 		return
 	end
     shyguylabel:Set("SCP-096 Shy Guy: "..tostring(shyguygui.Timer.Text))
@@ -760,7 +759,7 @@ end)
 table.insert(endconnections, omgc)
 local pdgc = docgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
 	if docgui.Required.TextTransparency == 0 then
-		doclabel:Set("SCP-049 Plague Doctor: "....tostring(docgui.Timer.Text).." (Gamepass Required)")
+		doclabel:Set("SCP-049 Plague Doctor: "..tostring(docgui.Timer.Text).." (Gamepass Required)")
 		return
 	end
     doclabel:Set("SCP-049 Plague Doctor: "..tostring(docgui.Timer.Text))
