@@ -276,6 +276,24 @@ workspace.ChildAdded:Connect(function()
 	end
 end)
 
+local function destroyrayfield()
+    print("Destroying...")
+	notif("Destroying...")
+    itemEsp:Set(false)
+    findRooms:Set(false)
+    noFlash:Set(false)
+    noShyGuy:Set(false)
+    ws:Set(15)
+    jp:Set(3)
+    silentaimbot = false
+    circl:Destroy()
+	if runLoop == true then
+        RunService:UnbindFromRenderStep("Aimbot") 
+    end
+    task.wait(.5)
+    Rayfield:Destroy()
+end
+
 ------------------------------------------------------------------
 
 local itemEsp = visualTab:CreateToggle({
@@ -558,21 +576,7 @@ local rj = settingsTab:CreateButton({
 local destroy = settingsTab:CreateButton({
     Name = "Destroy GUI/Panic",
     Callback = function()
-		print("Destroying...")
-		notif("Destroying...")
-        itemEsp:Set(false)
-        findRooms:Set(false)
-        noFlash:Set(false)
-        noShyGuy:Set(false)
-        ws:Set(15)
-        jp:Set(3)
-        silentaimbot = false
-        circl:Destroy()
-		if runLoop == true then
-            RunService:UnbindFromRenderStep("Aimbot") 
-        end
-        task.wait(.5)
-        Rayfield:Destroy()
+		destroyrayfield()
     end
 })
 
@@ -580,7 +584,7 @@ local rescript = settingsTab:CreateButton({
 	Name = "Reload Script",
 	Callback = function()
 		print("Reloading...")
-		destroy:Set("Destroy GUI/Panic")
+		destroyrayfield()
 		task.wait(.5)
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/alizeja/scp-demo-gui-script/refs/heads/main/main.lua"))()
 	end	
