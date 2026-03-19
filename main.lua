@@ -494,7 +494,7 @@ local shyguylabel = teamTab:CreateLabel(
     false
 )
 print(shyguygui.Name)
-for i, child in shyguigui:GetChildren() do
+for i, child in shyguygui:GetChildren() do
 	print(child.Name)
 end
 print(shyguygui.Required.TextTransparency)
