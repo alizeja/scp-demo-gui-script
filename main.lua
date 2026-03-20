@@ -40,6 +40,7 @@ local iesp = false
 local noshyguy = false
 local fastoldman = false
 local silentaimbot = false
+local resetafter = true
 
 local espelem = {}
 local exitelem = {}
@@ -319,6 +320,45 @@ workspace.ChildAdded:Connect(function()
 	end
 end)
 
+local nukeframe
+local disabled
+local timeframes
+local minone
+local mintwo
+local colon
+local secone
+local sectwo
+local point
+local milone
+local miltwo
+local inevitable
+
+local nukeconnections = {}
+
+local function getNukeVars()
+    if workspace:FindFirstChild("Heavy Containment Zone") then
+        for i, connection in nukeconnections do
+            connection:Disconnect()
+        end
+
+        nukeframe = workspace["Heavy Containment Zone"].WarheadNonModular.Room.Collidables.SCPSLPanel.Screen.WarheadScreen.MainFrame
+        disabled = nukeframe.Disabled
+        timeframes = nukeframe.Time
+        minone = timeframes["Min1"]
+        mintwo = timeframes["Min2"]
+        colon = timeframes[":"]
+        secone = timeframes["Sec1"]
+        sectwo = timeframes["Sec2"]
+        point = timeframes["."]
+        milone = timeframes["Mil1"]
+        miltwo = timeframes["Mil2"]
+        inevitable = nukeframe.Inevitable
+        return true
+    else
+        return false
+    end
+end
+
 ------------------------------------------------------------------
 
 local itemEsp = visualTab:CreateToggle({
@@ -572,12 +612,12 @@ local noShyGuy = mainTab:CreateToggle({
 })
 
 local fasterOldMan = mainTab:CreateToggle({
-		Name = "Faster 106 Door Movement",
-		CurrentValue = false,
-		Callback = function(Value)
-			fastoldman = Value
-			makefast(localplr.Character)
-		end
+	Name = "Faster 106 Door Movement",
+	CurrentValue = false,
+	Callback = function(Value)
+		fastoldman = Value
+		makefast(localplr.Character)
+	end
 })
 
 local disablefdmg = mainTab:CreateButton({
@@ -593,38 +633,125 @@ local disablefdmg = mainTab:CreateButton({
 
 local disableit = mainTab:CreateSection("Disable Fall Damage First!")
 
+local doireset = mainTab:CreateToggle({
+	Name = "Reset After Nuke Toggle, Cancel, or Activate",
+	CurrentValue = true,
+	Callback = function(Value)
+		resetafter = Value
+	end
+})
 local nuke = mainTab:CreateButton({
-    Name = "Toggle Nuke (resets you after.)",
+    Name = "Toggle Nuke",
     Callback = function()
-        local pos = CFrame.new(21, 955, -142)
         local char = localplr.Character or localplr.CharacterAdded:Wait()
         local root = char.HumanoidRootPart or char.Humanoid.RootPart
+        local cur = root.CFrame
+        local pos = CFrame.new(21, 955, -142)
 
-        TweenService:Create(root, TweenInfo.new(1, Enum.EasingStyle.Linear), {CFrame = pos}):Play()
-        task.wait(1.1)
+        TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = pos}):Play()
+        task.wait(1.65)
         workspace["Heavy Containment Zone"].WarheadNonModular.Room.Collidables.SCPSLPanel.LeverInteractables.Interaction:FireServer()
-        task.wait()
-        reset()
+        task.wait(.25)
+        if resetafter then
+            reset()
+        else
+            TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = cur}):Play()
+        end
     end
 })
 
 local cancel = mainTab:CreateButton({
-    Name = "Cancel Nuke (resets you after.)",
+    Name = "Cancel Nuke",
     Callback = function()
-        local pos = CFrame.new(21, 955, -142)
         local char = localplr.Character or localplr.CharacterAdded:Wait()
         local root = char.HumanoidRootPart or char.Humanoid.RootPart
+        local pos = CFrame.new(21, 955, -142)
+        local cur = root.CFrame
 
-        TweenService:Create(root, TweenInfo.new(1, Enum.EasingStyle.Linear), {CFrame = pos}):Play()
-        task.wait(1.1)
+        TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = pos}):Play()
+        task.wait(1.65)
         workspace["Heavy Containment Zone"].WarheadNonModular.Room.Collidables.SCPSLPanel.ButtonInteractable.Interaction:FireServer()
         workspace["Heavy Containment Zone"].WarheadNonModular.Room.Collidables.SCPSLPanel.LeverInteractables.Interaction:FireServer()
-        task.wait()
-        reset()
+        task.wait(.25)
+        if resetafter then
+            reset()
+        else
+            TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = cur}):Play()
+        end
+    end
+})
+local activate = mainTab:CreateButton({
+    Name = "Activate Nuke",
+    Callback = function()
+        local char = localplr.Character or localplr.CharacterAdded:Wait()
+        local root = char.HumanoidRootPart or char.Humanoid.RootPart
+        local cur = root.CFrame
+        local pos = CFrame.new(-82, -1527, 99)
+
+        local cover = workspace.Surface.Surface.GateA["Warhead Control Room"].Collidables.WarheadStand.CoverInteractables.Interaction
+        local button = workspace.Surface.Surface.GateA["Warhead Control Room"].Collidables.WarheadStand.ButtonInteractable.Interaction
+
+        TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = pos}):Play()
+        task.wait(1.65)
+        cover:FireServer()
+        task.wait(.1)
+        button:FireServer()
+        task.wait(.25)
+        if resetafter then
+            reset()
+        else
+            TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = cur}):Play()
+        end
     end
 })
 
-local ws = plrTab:CreateSlider({
+local nukesection = mainTab:CreateSection("Nuke Info")
+local disabledlabel = mainTab:CreateLabel("NO NUKE INFO")
+if disabled == nil then
+    disabledlabel:Set("NO NUKE INFO")
+else
+    disabledlabel:Set("Nuke: "..disabled.Text)
+end
+local timelabel = mainTab:CreateLabel("NO NUKE INFO")
+if timeframes == nil then
+    timelabel:Set("NO NUKE INFO")
+else
+    timelabel:Set(minone.Text..mintwo.Text..colon.Text..secone.Text..sectwo.Text..point.Text..milone.Text..miltwo.Text)
+end
+local nukeinfo = mainTab:CreateButton({
+    Name = "Get Nuke Information (for above)",
+    Callback = function()
+        if getNukeVars() == true then
+            notif("Got Nuke Info.")
+            disabledlabel:Set("Nuke: "..disabled.Text)
+            timelabel:Set(minone.Text..mintwo.Text..colon.Text..secone.Text..sectwo.Text..point.Text..milone.Text..miltwo.Text)
+
+            local nuketext
+            local dc = disabled:GetPropertyChangedSignal("Text"):Connect(function()
+                nuketext = "Nuke: "..disabled.Text
+                disabledlabel:Set(nuketext)
+            end)
+            table.insert(nukeconnections, dc)
+            local ic = inevitable:GetPropertyChangedSignal("Visible"):Connect(function()
+                if inevitable.Visible == true then
+                    disabledlabel:Set("Nuke: "..inevitable.Inevitable.Text)
+                else
+                    disabledlabel:Set(nuketext)
+                end
+            end)
+            table.insert(nukeconnections, ic)
+            local mc = miltwo:GetPropertyChangedSignal("Text"):Connect(function()
+                timelabel:Set(minone.Text..mintwo.Text..colon.Text..secone.Text..sectwo.Text..point.Text..milone.Text..miltwo.Text)
+            end)
+            table.insert(nukeconnections, mc)
+        else
+            notif("Cannot Get Nuke Info. (Map is loading?)")
+        end
+    end
+})
+
+
+local walk = plrTab:CreateSlider({
     Name = "Walk Speed",
     Range = {0, 100},
     Increment = 1,
@@ -639,7 +766,7 @@ local ws = plrTab:CreateSlider({
     end
 })
 
-local jp = plrTab:CreateSlider({
+local jump = plrTab:CreateSlider({
     Name = "Jump Height",
     Range = {1, 50},
     Increment = 1,
@@ -695,10 +822,6 @@ local function destroyrayfield()
 	print("no flash off")
     noShyGuy:Set(false)
 	print("no shy guy off")
-    ws:Set(15)
-	print("walkspeed reset")
-    jp:Set(3)
-	print("jump height reset")
     silentaimbot = false
 	print("aimbot off")
     circl:Destroy()
@@ -710,6 +833,10 @@ local function destroyrayfield()
     for i, connection in endconnections do
         connection:Disconnect()
 		print(connection, "disconnected")
+    end
+    for i, connection in nukeconnections do
+        connection:Disconnect()
+		print("nuke", connection, "disconnected")
     end
     task.wait(1.5)
 	print("rayfield destroying...")
@@ -778,6 +905,7 @@ local dagc = dogagaingui.Timer:GetPropertyChangedSignal("Text"):Connect(function
 	updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
 end)
 table.insert(endconnections, dagc)
+
 
 local currentTarget = nil
 local dz = 0.004
