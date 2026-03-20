@@ -481,7 +481,7 @@ end
 
 local queuedsection = teamTab:CreateSection("Queue")
 local queuelabel = teamTab:CreateLabel("Queued: None")
-if queuegui.Text == nil or queuegui.Text == " " then
+if queuegui.Text == nil or queuegui.Text == "" then
     queuelabel:Set(queuegui.Text)
 else
     queuelabel:Set("Queued: None")
@@ -724,7 +724,7 @@ local rescript = settingsTab:CreateButton({
 ---------LOOOP and END CONNECTIONS!!!!
 
 local qgc = queuegui:GetPropertyChangedSignal("Text"):Connect(function()
-    if queuegui.Text == nil or queuegui.Text == " " then
+    if queuegui.Text == nil or queuegui.Text == "" then
         queuelabel:Set("Queued: None")
     else
         queuelabel:Set(queuegui.Text)
