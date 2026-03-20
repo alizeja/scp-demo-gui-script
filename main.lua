@@ -463,11 +463,7 @@ local function updatelabel(gui, label, textname:string, gamepass:boolean)
 	local open = gui.Timer.Text == "0:00" or gui.Timer.TextTransparency == 1
 	if gui.Required.TextTransparency == 0 then
 		if gamepass then
-			if open then
-				label:Set(textname..": Open (Gamepass Required)")
-			else
-				label:Set(textname..": "..tostring(gui.Timer.Text).." (Gamepass Required)")
-			end
+			label:Set(textname..": ??? (Gamepass Required)")
 		else
 			if open then
 				label:Set(textname..": Open (Badge Required)")
