@@ -774,6 +774,7 @@ local dgc = doggui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
 end)
 table.insert(endconnections, dgc)
 local dagc = dogagaingui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+	print(dogagaingui)
 	if dogagaingui.Required.TextTransparency == 0 then
 		dogagainlabel:Set("SCP-939-89 With Many Voices: "..tostring(dogagaingui.Timer.Text).." (Gamepass Required)")
 		return
