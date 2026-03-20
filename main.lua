@@ -688,20 +688,31 @@ local function destroyrayfield()
     print("Destroying...")
 	notif("Destroying...")
     itemEsp:Set(false)
+	print("item esp off")
     findRooms:Set(false)
+	print("find rooms off")
     noFlash:Set(false)
+	print("no flash off")
     noShyGuy:Set(false)
+	print("no shy guy off")
     ws:Set(15)
+	print("walkspeed reset")
     jp:Set(3)
+	print("jump height reset")
     silentaimbot = false
+	print("aimbot off")
     circl:Destroy()
+	print("circle destroyed")
 	if runLoop == true then
         RunService:UnbindFromRenderStep("Aimbot") 
+		print("aimbot unbinded")
     end
     for i, connection in endconnections do
         connection:Disconnect()
+		print(connection.." disconnected")
     end
     task.wait(1.5)
+	print("rayfield destroying...")
     Rayfield:Destroy()
 end
 
@@ -717,6 +728,7 @@ local rescript = settingsTab:CreateButton({
 	Callback = function()
 		print("Reloading...")
 		destroyrayfield()
+		print("rayfield destroyed, loading script...")
 		task.wait(.5)
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/alizeja/scp-demo-gui-script/refs/heads/main/main.lua"))()
 	end	
