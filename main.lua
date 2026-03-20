@@ -457,6 +457,27 @@ local ballk = bindsTab:CreateKeybind({
     end
 })
 
+local function updatelabel(gui, label, textname:string, gamepass:boolean)
+	if not gui or not label or not textname then return end
+	local open = gui.Timer.Text == "0:00" or gui.Timer.TextTransparency == 1
+	if gui.Required.TextTransparency == 0 then
+		if gamepass then
+			if open then
+				label:Set(textname..": Open (Gamepass Required)")
+			else
+				label:Set(textname..": "..tostring(gui.Timer.Text).." (Gamepass Required)")
+			end
+		else
+			if open then
+				label:Set(textname..": Open (Badge Required)")
+			else
+				label:Set(textname..": "..tostring(gui.Timer.Text).." (Badge Required)")
+			end
+		end
+		return
+	end
+    label:Set(textname..": "..tostring(gui.Timer.Text))
+end
 
 local queuedsection = teamTab:CreateSection("Queue")
 local queuelabel = teamTab:CreateLabel("Queued: None")
@@ -473,18 +494,14 @@ local chaoslabel = teamTab:CreateLabel(
     Color3.new(),
     false
 )
-if chaosgui.Required.TextTransparency == 0 then
-	chaoslabel:Set("Chaos Insurgency: "..tostring(chaosgui.Timer.Text).." (Badge Required)")
-end
+updatelabel(chaosgui, chaoslabel, "Chaos Insurgency", false)
 local mtflabel = teamTab:CreateLabel(
     "Mobile Task Force: "..tostring(mtfgui.Timer.Text),
     6774779934,
     Color3.new(),
     false
 )
-if mtfgui.Required.TextTransparency == 0 then
-	mtflabel:Set("Mobile Task Force: "..tostring(mtfgui.Timer.Text).." (Badge Required)")
-end
+updatelabel(mtfgui, mtflabel, "Mobile Task Force", false)
 
 local scpssection = teamTab:CreateSection("SCPs")
 local shyguylabel = teamTab:CreateLabel(
@@ -493,45 +510,35 @@ local shyguylabel = teamTab:CreateLabel(
     Color3.new(),
     false
 )
-if shyguygui.Required.TextTransparency == 0 then
-	shyguylabel:Set("SCP-096 Shy Guy: "..tostring(shyguygui.Timer.Text).." (Gamepass Required)")
-end
+updatelabel(shyguygui, shyguylabel, "SCP-096 Shy Guy", true)
 local oldmanlabel = teamTab:CreateLabel(
     "SCP-106 Old Man: "..tostring(oldmangui.Timer.Text),
     9606026315,
     Color3.new(),
     false
 )
-if oldmangui.Required.TextTransparency == 0 then
-	oldmanlabel:Set("SCP-106 Old Man: "..tostring(oldmangui.Timer.Text).." (Gamepass Required)")
-end
+updatelabel(oldmangui, oldmanlabel, "SCP-106 Old Man", true)
 local doclabel = teamTab:CreateLabel(
     "SCP-049 Plague Doctor: "..tostring(docgui.Timer.Text),
     130261444621233,
     Color3.new(),
     false
 )
-if docgui.Required.TextTransparency == 0 then
-	doclabel:Set("SCP-049 Plague Doctor: "..tostring(docgui.Timer.Text).." (Gamepass Required)")
-end
+updatelabel(docgui, doclabel, "SCP-049 Plague Doctor", true)
 local doglabel = teamTab:CreateLabel(
     "SCP-939-53 With Many Voices: "..tostring(doggui.Timer.Text),
     17660598360,
     Color3.new(),
     false
 )
-if doggui.Required.TextTransparency == 0 then
-	doglabel:Set("SCP-939-53 With Many Voices: "..tostring(doggui.Timer.Text).." (Gamepass Required)")
-end
+updatelabel(doggui, doglabel, "SCP-939-53 With Many Voices", true)
 local dogagainlabel = teamTab:CreateLabel(
     "SCP-939-89 With Many Voices: "..tostring(dogagaingui.Timer.Text),
     10563151614,
     Color3.new(),
     false
 )
-if dogagaingui.Required.TextTransparency == 0 then
-	dogagainlabel:Set("SCP-939-89 With Many Voices: "..tostring(dogagaingui.Timer.Text).." (Gamepass Required)")
-end
+updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
 
 
 local toggleaimbot = mainTab:CreateDropdown({
@@ -716,70 +723,40 @@ local rescript = settingsTab:CreateButton({
 
 ---------LOOOP and END CONNECTIONS!!!!
 
-
 local qgc = queuegui:GetPropertyChangedSignal("Text"):Connect(function()
     if queuegui.Text == nil or queuegui.Text == " " then
-        queuelabel:Set(queuegui.Text)
-    else
         queuelabel:Set("Queued: None")
+    else
+        queuelabel:Set(queuegui.Text)
     end
 end)
 table.insert(endconnections, qgc)
 local cgc = chaosgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	if chaosgui.Required.TextTransparency == 0 then
-		chaoslabel:Set("Chaos Insurgency: "..tostring(chaosgui.Timer.Text).." (Badge Required)")
-		return
-	end
-    chaoslabel:Set("Chaos Insurgency: "..tostring(chaosgui.Timer.Text))
+	updatelabel(chaosgui, chaoslabel, "Chaos Insurgency", false)
 end)
 table.insert(endconnections, cgc)
 local mtfgc = mtfgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	if mtfgui.Required.TextTransparency == 0 then
-		mtflabel:Set("Mobile Task Force: "..tostring(mtfgui.Timer.Text).." (Badge Required)")
-		return
-	end
-    mtflabel:Set("Mobile Task Force: "..tostring(mtfgui.Timer.Text))
+	updatelabel(mtfgui, mtflabel, "Mobile Task Force", false)
 end)
 table.insert(endconnections, mtfgc)
 local sggc = shyguygui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	if shyguygui.Required.TextTransparency == 0 then
-		shyguylabel:Set("SCP-096 Shy Guy: "..tostring(shyguygui.Timer.Text).." (Gamepass Required)")
-		return
-	end
-    shyguylabel:Set("SCP-096 Shy Guy: "..tostring(shyguygui.Timer.Text))
+	updatelabel(shyguygui, shyguylabel, "SCP-096 Shy Guy", true)
 end)
 table.insert(endconnections, sggc)
 local omgc = oldmangui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	if oldmangui.Required.TextTransparency == 0 then
-		oldmanlabel:Set("SCP-106 Old Man: "..tostring(oldmangui.Timer.Text).." (Gamepass Required)")
-		return
-	end
-    oldmanlabel:Set("SCP-106 Old Man: "..tostring(oldmangui.Timer.Text))
+	updatelabel(oldmangui, oldmanlabel, "SCP-106 Old Man", true)
 end)
 table.insert(endconnections, omgc)
 local pdgc = docgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	if docgui.Required.TextTransparency == 0 then
-		doclabel:Set("SCP-049 Plague Doctor: "..tostring(docgui.Timer.Text).." (Gamepass Required)")
-		return
-	end
-    doclabel:Set("SCP-049 Plague Doctor: "..tostring(docgui.Timer.Text))
+	updatelabel(docgui, doclabel, "SCP-049 Plague Doctor", true)
 end)
 table.insert(endconnections, pdgc)
 local dgc = doggui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	if doggui.Required.TextTransparency == 0 then
-		doglabel:Set("SCP-939-53 With Many Voices: "..tostring(doggui.Timer.Text).." (Gamepass Required)")
-		return
-	end
-    doglabel:Set("SCP-939-53 With Many Voices: "..tostring(doggui.Timer.Text))
+	updatelabel(doggui, doglabel, "SCP-939-53 With Many Voices", true)
 end)
 table.insert(endconnections, dgc)
 local dagc = dogagaingui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	print(dogagaingui)
-	if dogagaingui.Required.TextTransparency == 0 then
-		dogagainlabel:Set("SCP-939-89 With Many Voices: "..tostring(dogagaingui.Timer.Text).." (Gamepass Required)")
-		return
-	end
-    dogagainlabel:Set("SCP-939-89 With Many Voices: "..tostring(dogagaingui.Timer.Text))
+	updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
 end)
 table.insert(endconnections, dagc)
 
