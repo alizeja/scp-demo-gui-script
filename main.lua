@@ -475,9 +475,13 @@ local function updatelabel(gui, label, textname:string, gamepass:boolean)
 				label:Set(textname..": "..tostring(gui.Timer.Text).." (Badge Required)")
 			end
 		end
-		return
+	else
+		if open then
+			label:Set(textname..": Open")
+		else
+			label:Set(textname..": "..tostring(gui.Timer.Text))
+		end
 	end
-    label:Set(textname..": "..tostring(gui.Timer.Text))
 end
 
 local creditslabel = teamTab:CreateLabel(credits.Text)
