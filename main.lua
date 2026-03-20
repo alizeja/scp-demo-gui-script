@@ -485,9 +485,9 @@ local creditslabel = teamTab:CreateLabel(credits.Text)
 local queuedsection = teamTab:CreateSection("Queue")
 local queuelabel = teamTab:CreateLabel("Queued: None")
 if queuegui.Text == nil or queuegui.Text == "" then
-    queuelabel:Set(queuegui.Text)
-else
     queuelabel:Set("Queued: None")
+else
+    queuelabel:Set(queuegui.Text)
 end
 
 local playerteamsection = teamTab:CreateSection("Player Teams")
