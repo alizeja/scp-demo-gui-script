@@ -15,7 +15,7 @@ local Window = Rayfield:CreateWindow({
 
 local mainTab = Window:CreateTab("Main")
 local visualTab = Window:CreateTab("Visual")
-local teamTab = Window:CreateTab("Team")
+local teamTab = Window:CreateTab("Team/Shop")
 local plrTab = Window:CreateTab("Player")
 local bindsTab = Window:CreateTab("Shortcuts")
 local settingsTab = Window:CreateTab("Debug")
@@ -276,6 +276,7 @@ local playerTeams = buttons.Other
 local scpTeams = buttons.SCPs
 
 local queuegui = buttons.Parent.QueuedText
+local credits = buttons.Parent.Parent.Shop.Credits
 
 for i, frame in playerTeams:GetChildren() do
     if not frame:IsA("Frame") then continue end
@@ -478,6 +479,8 @@ local function updatelabel(gui, label, textname:string, gamepass:boolean)
 	end
     label:Set(textname..": "..tostring(gui.Timer.Text))
 end
+
+local creditslabel = teamTab:CreateLabel(credits.Text)
 
 local queuedsection = teamTab:CreateSection("Queue")
 local queuelabel = teamTab:CreateLabel("Queued: None")
@@ -723,6 +726,10 @@ local rescript = settingsTab:CreateButton({
 
 ---------LOOOP and END CONNECTIONS!!!!
 
+local cc = credits:GetPropertyChangedSignal("Text"):Connect(function()
+	creditslabel:Set(credits.Text)
+end)
+table.insert(endconnections, cc)
 local qgc = queuegui:GetPropertyChangedSignal("Text"):Connect(function()
     if queuegui.Text == nil or queuegui.Text == "" then
         queuelabel:Set("Queued: None")
