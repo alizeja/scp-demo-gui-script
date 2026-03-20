@@ -940,7 +940,7 @@ RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, func
     if diff < dz then
 	    return
     end
-    if diff < 0.05 then
+    if diff < 0.125 then
         Camera.CFrame = CFrame.new(camPos, currentTarget.Position)
 	    return
     end
