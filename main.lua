@@ -709,7 +709,7 @@ local function destroyrayfield()
     end
     for i, connection in endconnections do
         connection:Disconnect()
-		print(tostring(connection).." disconnected")
+		print(connection, "disconnected")
     end
     task.wait(1.5)
 	print("rayfield destroying...")
