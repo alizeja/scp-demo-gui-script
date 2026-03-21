@@ -1,3 +1,4 @@
+---@diagnostic disable, 1032: deprecated, 1032
 ---------pleaseee dont look at my code, it's spaghetti
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -30,8 +31,8 @@ local TweenService = game:GetService("TweenService")
 PlaceId, JobId = game.PlaceId, game.JobId
 
 local Camera = workspace.CurrentCamera
-
 local localplr = Players.LocalPlayer
+
 local cframe = CFrame.new(1.53290033, 1.97216606, -0.825374484, 0.982948065, -0.171378091, -0.0666531026, 0.0773534179, 0.714215279, -0.695638537, 0.166821882, 0.678620696, 0.715293169)
 local falldmg = ReplicatedStorage.PVP:FindFirstChild("FallDamage")
 local flashfx = localplr.PlayerGui.FlashFx
@@ -58,6 +59,17 @@ function notif(text, title, dur)
     })
 end
 
+local function getChar(plr)
+    return plr.Character or plr.CharacterAdded:Wait()
+end
+local function getHuman(char)
+    return char:FindFirstChildOfClass("Humanoid")
+end
+local function getRoot(char, humanoid)
+    if not humanoid then humanoid = getHuman(char) end
+    return char:FindFirstChild("HumanoidRootPart") or (humanoid and humanoid.RootPart)
+end
+
 local function sameTeam(plr)
     local localteam = localplr.Team
 	local plrteam = plr.Team
@@ -82,8 +94,8 @@ local function sameTeam(plr)
 end
 
 local function isDead(plr)
-	local plrchar = plr.Character or plr.CharacterAdded:Wait()
-	local humanoid = plrchar:FindFirstChildWhichIsA("Humanoid")
+    local plrchar = getChar(plr)
+    local humanoid = getHuman(plrchar)
 
 	if plrchar and humanoid then
 		return humanoid:GetState() == Enum.HumanoidStateType.Dead
@@ -91,8 +103,8 @@ local function isDead(plr)
 end
 
 local function reset()
-    local char = localplr.Character or localplr.CharacterAdded:Wait()
-    local humanoid = char:FindFirstChild("Humanoid")
+    local char = getChar(localplr)
+    local humanoid = getHuman(char)
     if humanoid then
         humanoid:ChangeState(Enum.HumanoidStateType.Dead)
     elseif char then
@@ -103,7 +115,7 @@ local function reset()
 end
 
 local function makefast(char)
-	local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+	local humanoid = getHuman(char)
 	if humanoid then
 		humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
 			if fastoldman ~= true and localplr.Team.Name ~= "SCP" then return end
@@ -166,7 +178,7 @@ local function find(child)
 end
 
 local function exit(child)
-	return (child:IsA("BasePart") and (child.Name == "Front" or child.Name == "HCZ") and (child.Parent.Name == "CheckptA" or child.Parent.Name == "CheckptB" or child.Parent.Name == "914" or child.Parent.Name == "South HCZ-EZ Checkpoint" or child.Parent.Name == "North HCZ-EZ Checkpoint" or child.Parent.Name == "GateA" or child.Parent.Name == "GateB" or child.Parent.Name == "Warhead" or child.Parent.Name == "049"))
+	return (child:IsA("BasePart") and (child.Name == "Front" or child.Name == "HCZ") and (child.Parent.Name == "CheckptA" or child.Parent.Name == "CheckptB" or child.Parent.Name == "914" or child.Parent.Name == "South HCZ-EZ Checkpoint" or child.Parent.Name == "North HCZ-EZ Checkpoint" or child.Parent.Name == "GateA" or child.Parent.Name == "GateB" or child.Parent.Name == "Warhead" or child.Parent.Name == "049" or child.Parent.Name == "106"))
 end
 
 local circl = Drawing.new("Circle")
@@ -215,7 +227,7 @@ Players.PlayerAdded:Connect(trackPlayer)
 Players.PlayerRemoving:Connect(untrackPlayer)
 
 local function GetClosestHead()
-	local localChar = localplr.Character
+	local localChar = getChar(localplr)
 	if not localChar then return nil end
 
 	local localHead = localChar:FindFirstChild("Head")
@@ -417,7 +429,7 @@ local findRooms = visualTab:CreateToggle({
 	            	b.Transparency = 0.5
                     table.insert(exitelem, b)
 
-        	    	if handle.Parent.Name == "049" or handle.Parent.Name == "Warhead" or handle.Parent.Name == "914" then
+        	    	if handle.Parent.Name == "049" or handle.Parent.Name == "Warhead" or handle.Parent.Name == "914" or handle.Parent.Name == "106" then
         		    	b.Color3 = Color3.new(255, 255, 0)
         	    	end
 
@@ -465,7 +477,7 @@ local healk = bindsTab:CreateKeybind({
     CurrentKeybind = "H",
     HoldToInteract = false,
     Callback = function(Keybind)
-        local char = localplr.Character or localplr.CharacterAdded:Wait()
+        local char = getChar(localplr)
 		local backpack = localplr.Backpack
 		local medkit = backpack:FindFirstChild("Medkit")
 		if medkit then
@@ -473,7 +485,7 @@ local healk = bindsTab:CreateKeybind({
 			medkit.MedkitServer.Pressing:FireServer(true)
 			notif("Healing! Unequip any non-medkit items!")
 		else
-			notif("No medkit in inventory.")
+			notif("No medkit in inventory. (Or already holding one!)")
 		end
     end
 })
@@ -483,17 +495,17 @@ local ballk = bindsTab:CreateKeybind({
     CurrentKeybind = "B",
     HoldToInteract = false,
     Callback = function(Keybind)
-        local char = localplr.Character or localplr.CharacterAdded:Wait()
-		local hrp = char.HumanoidRootPart
+        local char = getChar(localplr)
+		local hrp = getRoot(char)
 		local backpack = localplr.Backpack
 
 		local ball = backpack:FindFirstChild("SCP-018")
 		if ball then
 			ball.Parent = char
-			ball.SCP018Interaction:FireServer("Throw", hrp.CFrame * cframe, game.Workspace.CurrentCamera.CFrame.LookVector)
+			ball.SCP018Interaction:FireServer("Throw", hrp.CFrame * cframe, Camera.CFrame.LookVector)
 			notif("Throwing ball!")
 		else
-			notif("No ball in inventory.")
+			notif("No ball in inventory. (Or already holding one!)")
 		end
     end
 })
@@ -616,7 +628,7 @@ local fasterOldMan = mainTab:CreateToggle({
 	CurrentValue = false,
 	Callback = function(Value)
 		fastoldman = Value
-		makefast(localplr.Character)
+		makefast(getChar(localplr))
 	end
 })
 
@@ -634,17 +646,54 @@ local disablefdmg = mainTab:CreateButton({
 local disableit = mainTab:CreateSection("Disable Fall Damage First!")
 
 local doireset = mainTab:CreateToggle({
-	Name = "Reset After Nuke Toggle, Cancel, or Activate",
+	Name = "Reset After Pressing Buttons Below",
 	CurrentValue = true,
 	Callback = function(Value)
 		resetafter = Value
 	end
 })
+local containhim = mainTab:CreateButton({
+    Name = "Contain SCP-106 Old Man",
+    Callback = function()
+        local cell = workspace:FindFirstChild("Heavy Containment Zone"):FindFirstChild("106") and workspace["Heavy Containment Zone"]["106"]:FindFirstChild("Room"):FindFirstChild("Collidables"):FindFirstChild("106_Cell")
+        local buttoncf
+        local touchcf
+        local inter
+        if cell then
+            buttoncf = cell.RecontainmentBack.CFrame
+            touchcf = cell.Touch.CFrame
+            inter = cell.RecontainmentButton.Interaction
+        else
+            notif("Cannot Find 106 Room. Map is Loading?")
+            return
+        end
+
+        local char = getChar(localplr)
+        local root = getRoot(char)
+        local cur = root.CFrame
+
+        if inter and root then
+            TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = touchcf}):Play()
+            task.wait(3)
+            char = getChar(localplr)
+            root = getRoot(char)
+            TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = buttoncf}):Play()
+            task.wait(1.65)
+            inter:FireServer()
+            task.wait(.25)
+            if resetafter then
+                reset()
+            else
+                TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = cur}):Play()
+            end
+        end
+    end
+})
 local nuke = mainTab:CreateButton({
     Name = "Toggle Nuke",
     Callback = function()
-        local char = localplr.Character or localplr.CharacterAdded:Wait()
-        local root = char.HumanoidRootPart or char.Humanoid.RootPart
+        local char = getChar(localplr)
+        local root = getRoot(char)
         local cur = root.CFrame
         local pos = CFrame.new(21, 955, -142)
 
@@ -663,8 +712,8 @@ local nuke = mainTab:CreateButton({
 local cancel = mainTab:CreateButton({
     Name = "Cancel Nuke",
     Callback = function()
-        local char = localplr.Character or localplr.CharacterAdded:Wait()
-        local root = char.HumanoidRootPart or char.Humanoid.RootPart
+        local char = getChar(localplr)
+        local root = getRoot(char)
         local pos = CFrame.new(21, 955, -142)
         local cur = root.CFrame
 
@@ -683,8 +732,8 @@ local cancel = mainTab:CreateButton({
 local activate = mainTab:CreateButton({
     Name = "Activate Nuke",
     Callback = function()
-        local char = localplr.Character or localplr.CharacterAdded:Wait()
-        local root = char.HumanoidRootPart or char.Humanoid.RootPart
+        local char = getChar(localplr)
+        local root = getRoot(char)
         local cur = root.CFrame
         local pos = CFrame.new(-82, -1527, 99)
 
@@ -753,12 +802,12 @@ local nukeinfo = mainTab:CreateButton({
 
 local walk = plrTab:CreateSlider({
     Name = "Walk Speed",
-    Range = {0, 100},
+    Range = {1, 100},
     Increment = 1,
     CurrentValue = 15,
     Callback = function(Value)
-        local char = localplr.Character or localplr.CharacterAdded:Wait()
-        local humanoid = char:FindFirstChild("Humanoid")
+        local char = getChar(localplr)
+        local humanoid = getHuman(char)
 
         if char and humanoid then
             humanoid.WalkSpeed = Value
@@ -772,8 +821,8 @@ local jump = plrTab:CreateSlider({
     Increment = 1,
     CurrentValue = 3,
     Callback = function(Value)
-        local char = localplr.Character or localplr.CharacterAdded:Wait()
-        local humanoid = char:FindFirstChild("Humanoid")
+        local char = getChar(localplr)
+        local humanoid = getHuman(char)
 
         if char and humanoid then
             humanoid.JumpHeight = Value
@@ -803,7 +852,7 @@ local rj = settingsTab:CreateButton({
         notif("Rejoining...")
         if #Players:GetPlayers() <= 1 then
 		    Players.LocalPlayer:Kick("\nRejoining...")
-		    wait()
+		    task.wait()
 		    TeleportService:Teleport(PlaceId, Players.LocalPlayer)
 	    else
 		    TeleportService:TeleportToPlaceInstance(PlaceId, JobId, Players.LocalPlayer)
@@ -826,6 +875,8 @@ local function destroyrayfield()
 	print("aimbot off")
     circl:Destroy()
 	print("circle destroyed")
+    fasterOldMan:Set(false)
+    print("faster old man off")
 	if runLoop == true then
         RunService:UnbindFromRenderStep("Aimbot") 
 		print("aimbot unbinded")

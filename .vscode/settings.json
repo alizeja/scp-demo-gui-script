@@ -1,0 +1,20 @@
+{
+    "Lua.diagnostics.globals": [
+        "workspace",
+        "CFrame",
+        "TweenInfo",
+        "task",
+        "Enum",
+        "Drawing",
+        "Color3",
+        "RaycastParams",
+        "continue",
+        "Instance",
+        "UDim2",
+        "game"
+    ],
+    "Lua.diagnostics.disable": [
+        "undefined-global",
+        "undefined-field"
+    ]
+}
