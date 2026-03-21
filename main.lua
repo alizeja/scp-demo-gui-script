@@ -1,5 +1,11 @@
 ---------pleaseee dont look at my code, it's spaghetti
 
+
+
+
+
+
+
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -118,9 +124,9 @@ local function makefast(char)
 	if humanoid then
 		humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
 			if fastoldman ~= true and localplr.Team.Name ~= "SCP" then return end
-			if humanoid.WalkSpeed == 2.75 or humanoid.WalkSpeed == 16.5 then return end
+			if humanoid.WalkSpeed == 3 or humanoid.WalkSpeed == 16.5 then return end
 			if humanoid.WalkSpeed <= 1.5 then
-				humanoid.WalkSpeed = 2.75
+				humanoid.WalkSpeed = 3
 			elseif humanoid.WalkSpeed <= 15 then
 				humanoid.WalkSpeed = 16.5
 			end
@@ -134,8 +140,9 @@ local function find(child)
 	if child:IsA("Tool") then
 		if not child:FindFirstChild("Handle") then return end
 		local handle = child.Handle
-		if handle:FindFirstChild("BoxHandleAdornment") then
-			handle.BoxHandleAdornment:Destroy()
+        local ba = handle:FindFirstChildOfClass("BoxHandleAdornment", true)
+		if ba then
+			ba:Destroy()
 		end
 		local ttype = child:GetAttribute("ToolType")
 
@@ -147,6 +154,7 @@ local function find(child)
 		b.ZIndex = 10
 		b.Transparency = 0.5
         table.insert(espelem, b)
+
 		
 		if ttype == "Keycard" then
 			b.Color3 = Color3.fromRGB(0, 255, 255)
@@ -173,6 +181,25 @@ local function find(child)
 		else
 			b.Color3 = Color3.fromRGB(255, 255, 255)
 		end
+
+        ------micro
+        local charge
+        local ccolor
+        if child.Name == "Micro HID" then
+            charge = child.MicroServer.Charge
+            b.Size += Vector3.new(.5,.5,.5)
+
+            local function microCharge()
+                charge = child.MicroServer.Charge
+                local value = math.clamp(charge.Value, 0, 1)
+                ccolor = Color3.new(value, value, value)
+                b.Color3 = ccolor
+                b.Transparency = 0.5 + (1 - value) * 0.25
+            end
+            microCharge()
+
+            charge:GetPropertyChangedSignal("Value"):Connect(microCharge)
+        end
 	end
 end
 
