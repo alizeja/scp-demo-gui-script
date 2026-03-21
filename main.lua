@@ -1,4 +1,3 @@
----@diagnostic disable, 1032: deprecated, 1032
 ---------pleaseee dont look at my code, it's spaghetti
 
 if not game:IsLoaded() then game.Loaded:Wait() end
