@@ -40,7 +40,7 @@ local localplr = Players.LocalPlayer
 
 local cframe = CFrame.new(1.53290033, 1.97216606, -0.825374484, 0.982948065, -0.171378091, -0.0666531026, 0.0773534179, 0.714215279, -0.695638537, 0.166821882, 0.678620696, 0.715293169)
 local falldmg = ReplicatedStorage.PVP:FindFirstChild("FallDamage")
-local flashfx = localplr.PlayerGui.FlashFx
+local flashfx = localplr.PlayerGui:FindFirstChild("FlashFx") or nil
 
 local iesp = false
 local noshyguy = false
@@ -363,10 +363,8 @@ local disabled
 local timeframes
 local minone
 local mintwo
-local colon
 local secone
 local sectwo
-local point
 local milone
 local miltwo
 local inevitable
@@ -384,10 +382,8 @@ local function getNukeVars()
         timeframes = nukeframe.Time
         minone = timeframes["Min1"]
         mintwo = timeframes["Min2"]
-        colon = timeframes[":"]
         secone = timeframes["Sec1"]
         sectwo = timeframes["Sec2"]
-        point = timeframes["."]
         milone = timeframes["Mil1"]
         miltwo = timeframes["Mil2"]
         inevitable = nukeframe.Inevitable
@@ -791,7 +787,7 @@ local timelabel = mainTab:CreateLabel("NO NUKE INFO")
 if timeframes == nil then
     timelabel:Set("NO NUKE INFO")
 else
-    timelabel:Set(minone.Text..mintwo.Text..colon.Text..secone.Text..sectwo.Text..point.Text..milone.Text..miltwo.Text)
+    timelabel:Set(minone.Text..mintwo.Text..":"..secone.Text..sectwo.Text..":"..milone.Text..miltwo.Text)
 end
 local nukeinfo = mainTab:CreateButton({
     Name = "Get Nuke Information (for above)",
@@ -799,7 +795,7 @@ local nukeinfo = mainTab:CreateButton({
         if getNukeVars() == true then
             notif("Got Nuke Info.")
             disabledlabel:Set("Nuke: "..disabled.Text)
-            timelabel:Set(minone.Text..mintwo.Text..colon.Text..secone.Text..sectwo.Text..point.Text..milone.Text..miltwo.Text)
+            timelabel:Set(minone.Text..mintwo.Text..":"..secone.Text..sectwo.Text..":"..milone.Text..miltwo.Text)
 
             local nuketext
             local dc = disabled:GetPropertyChangedSignal("Text"):Connect(function()
@@ -816,7 +812,7 @@ local nukeinfo = mainTab:CreateButton({
             end)
             table.insert(nukeconnections, ic)
             local mc = miltwo:GetPropertyChangedSignal("Text"):Connect(function()
-                timelabel:Set(minone.Text..mintwo.Text..colon.Text..secone.Text..sectwo.Text..point.Text..milone.Text..miltwo.Text)
+                timelabel:Set(minone.Text..mintwo.Text..":"..secone.Text..sectwo.Text..":"..milone.Text..miltwo.Text)
             end)
             table.insert(nukeconnections, mc)
         else
