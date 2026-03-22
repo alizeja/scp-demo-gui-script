@@ -493,6 +493,26 @@ local fullbright = visualTab:CreateButton({
     end
 })
 
+local vd = {}
+local visd = visualTab:CreateButton({
+    Name = "Visible Borders (Anti-Cheat Detectors)",
+    Callback = function()
+        local ds = 0
+        for i, v in vd do
+            v.Transparency = 1
+        end
+        vd = {}
+        for i, d in workspace:GetDescendants() do
+            if d.Name == "Detector" and d:FindFirstChild("TouchInterest") and d.Transparency == 1 then
+                d.Transparency = 0.625
+                ds += 1
+                table.insert(vd, d)
+            end
+        end
+        notif("Found "..ds.." Borders.")
+    end
+})
+
 
 local healk = bindsTab:CreateKeybind({
     Name = "Quick Heal (Need medkit in inventory)",
@@ -897,8 +917,13 @@ local function destroyrayfield()
 	print("aimbot off")
     circl:Destroy()
 	print("circle destroyed")
-    fasterOldMan:Set(false)
+    fastoldman = false
     print("faster old man off")
+    for i, v in vd do
+        v.Transparency = 1
+    end
+    vd = {}
+    print("set borders invisible again")
 	if runLoop == true then
         RunService:UnbindFromRenderStep("Aimbot") 
 		print("aimbot unbinded")
