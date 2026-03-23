@@ -47,6 +47,7 @@ local noshyguy = false
 local fastoldman = false
 local silentaimbot = false
 local filterteam = true
+local filtercds = true
 local resetafter = true
 
 local espelem = {}
@@ -84,19 +85,20 @@ local function sameTeam(plr)
 		return true
 	end
 	if localteam.Name == "Class D" or localteam.Name == "Chaos Insurgency" then
-		if plrteam.Name == "Class D" or plrteam.Name == "Chaos Insurgency" then
+		if plrteam.Name == "Class D" or plrteam.Name == "Chaos Insurgency" or (filtercds and localteam.Name == "Class D" and plrteam.Name == "Scientist") then
 			return true
 		else
 			return false
 		end
 	end
 	if localteam.Name == "Scientist" or localteam.Name == "Mobile Task Force" then
-		if plrteam.Name == "Scientist" or plrteam.Name == "Mobile Task Force" then
+		if plrteam.Name == "Scientist" or plrteam.Name == "Mobile Task Force" or (filtercds and localteam.Name == "Scientist" and plrteam.Name == "Class D") then
 			return true
 		else
 			return false
 		end
 	end
+    return false
 end
 
 local function isDead(plr)
@@ -227,7 +229,7 @@ local function trackPlayer(player)
 
 	local function onCharacter(char)
 		trackedPlayers[player].Character = char
-		trackedPlayers[player].Head = char:WaitForChild("Head", 2)
+        trackedPlayers[player].Head = char:WaitForChild("Head", 2)
 	end
 
 	if player.Character then
@@ -258,7 +260,9 @@ local function GetClosestHead()
 	if not localChar then return nil end
 
 	local localHead = localChar:FindFirstChild("Head")
-	if not localHead then return nil end
+	if not localHead then 
+        localHead = getRoot(localChar)
+    end
 
 	local rayParams = RaycastParams.new()
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -515,43 +519,7 @@ local visd = visualTab:CreateButton({
 })
 
 
-local healk = bindsTab:CreateKeybind({
-    Name = "Quick Heal (Need medkit in inventory)",
-    CurrentKeybind = "H",
-    HoldToInteract = false,
-    Callback = function(Keybind)
-        local char = getChar(localplr)
-		local backpack = localplr.Backpack
-		local medkit = backpack:FindFirstChild("Medkit")
-		if medkit then
-			medkit.Parent = char
-			medkit.MedkitServer.Pressing:FireServer(true)
-			notif("Healing! Unequip any non-medkit items!")
-		else
-			notif("No medkit in inventory. (Or already holding one!)")
-		end
-    end
-})
 
-local ballk = bindsTab:CreateKeybind({
-    Name = "Quick Ball Throw (Need normal SCP-018 in inventory)",
-    CurrentKeybind = "B",
-    HoldToInteract = false,
-    Callback = function(Keybind)
-        local char = getChar(localplr)
-		local hrp = getRoot(char)
-		local backpack = localplr.Backpack
-
-		local ball = backpack:FindFirstChild("SCP-018")
-		if ball then
-			ball.Parent = char
-			ball.SCP018Interaction:FireServer("Throw", hrp.CFrame * cframe, Camera.CFrame.LookVector)
-			notif("Throwing ball!")
-		else
-			notif("No ball in inventory. (Or already holding one!)")
-		end
-    end
-})
 
 local function updatelabel(gui, label, textname:string, gamepass:boolean)
 	if not gui or not label or not textname then return end
@@ -641,12 +609,13 @@ updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
 
 local toggleaimbot = mainTab:CreateDropdown({
 	Name = "Aimbot (Buggy)",
-	Options = {"Toggle On/Off", "Filter Team", "Circle"},
-	CurrentOption = "Filter Team",
+	Options = {"Toggle On/Off", "Filter Team", "Filter Class D/Scientist", "Circle"},
+	CurrentOption = {"Filter Team", "Filter Class D/Scientist"},
 	MultipleOptions = true,
 	Callback = function(Options)
 		silentaimbot = table.find(Options, "Toggle On/Off") ~= nil
         filterteam = table.find(Options, "Filter Team") ~= nil
+        filtercds = table.find(Options, "Filter Class D/Scientist") ~= nil
 		circl.Visible = table.find(Options, "Circle") ~= nil
 	end
 })
@@ -798,6 +767,67 @@ local activate = mainTab:CreateButton({
     end
 })
 
+local aimbotk = bindsTab:CreateKeybind({
+    Name = "Toggle Aimbot",
+    CurrentKeybind = "P",
+    HoldToInteract = false,
+    Callback = function(Keybind)
+        local options = {}
+        if not silentaimbot then
+            table.insert(options, "Toggle On/Off")
+        end
+        if filtercds then
+            table.insert(options, "Filter Class D/Scientist")
+        end
+        if filterteam then
+            table.insert(options, "Filter Team")
+        end
+        if circl.Visible then
+            table.insert(options, "Circle")
+        end
+
+        toggleaimbot:Set(options)
+    end
+})
+
+local healk = bindsTab:CreateKeybind({
+    Name = "Quick Heal (Need medkit in inventory)",
+    CurrentKeybind = "H",
+    HoldToInteract = false,
+    Callback = function(Keybind)
+        local char = getChar(localplr)
+		local backpack = localplr.Backpack
+		local medkit = backpack:FindFirstChild("Medkit")
+		if medkit then
+			medkit.Parent = char
+			medkit.MedkitServer.Pressing:FireServer(true)
+			notif("Healing! Unequip any non-medkit items!")
+		else
+			notif("No medkit in inventory. (Or already holding one!)")
+		end
+    end
+})
+
+local ballk = bindsTab:CreateKeybind({
+    Name = "Quick Ball Throw (Need normal SCP-018 in inventory)",
+    CurrentKeybind = "B",
+    HoldToInteract = false,
+    Callback = function(Keybind)
+        local char = getChar(localplr)
+		local hrp = getRoot(char)
+		local backpack = localplr.Backpack
+
+		local ball = backpack:FindFirstChild("SCP-018")
+		if ball then
+			ball.Parent = char
+			ball.SCP018Interaction:FireServer("Throw", hrp.CFrame * cframe, Camera.CFrame.LookVector)
+			notif("Throwing ball!")
+		else
+			notif("No ball in inventory. (Or already holding one!)")
+		end
+    end
+})
+
 local nukesection = mainTab:CreateSection("Nuke Info")
 local disabledlabel = mainTab:CreateLabel("NO NUKE INFO")
 if disabled == nil then
@@ -915,10 +945,8 @@ local function destroyrayfield()
 	print("no flash off")
     noShyGuy:Set(false)
 	print("no shy guy off")
-    silentaimbot = false
-	print("aimbot off")
-    circl:Destroy()
-	print("circle destroyed")
+    toggleaimbot:Set({})
+	print("aimbot fully off")
     fastoldman = false
     print("faster old man off")
     for i, v in vd do
