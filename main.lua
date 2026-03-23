@@ -508,6 +508,7 @@ local visd = visualTab:CreateButton({
         end
         vd = {}
         for i, d in workspace:GetDescendants() do
+            if not d:IsA("BasePart") then continue end
             if d.Name == "Detector" and d:FindFirstChild("TouchInterest") and d.Transparency == 1 then
                 d.Transparency = 0.625
                 d.Color = Color3.new(0,0,1)
