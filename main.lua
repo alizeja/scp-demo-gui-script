@@ -510,7 +510,7 @@ local visd = visualTab:CreateToggle({
                     d.Color = Color3.new(1,0,0)
                     ds += 1
                    table.insert(vd, d)
-                elseif d.Name == "InvisCollision" then 
+                elseif d.Name == "InvisCollision" or d.Name == "Barrier" then 
                     d.Transparency = 0.25
                     ds += 1
                     table.insert(vd, d)
