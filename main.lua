@@ -46,6 +46,7 @@ local iesp = false
 local noshyguy = false
 local fastoldman = false
 local silentaimbot = false
+local filterteam = true
 local resetafter = true
 
 local espelem = {}
@@ -267,7 +268,7 @@ local function GetClosestHead()
 	local dist = circl.Radius
 
 	for player, data in pairs(trackedPlayers) do
-        if sameTeam(player) then continue end
+        if filterteam and sameTeam(player) then continue end
 		local head = data.Head
 		local char = data.Character
 
@@ -640,12 +641,13 @@ updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
 
 local toggleaimbot = mainTab:CreateDropdown({
 	Name = "Aimbot (Buggy)",
-	Options = {"Toggle On/Off", "Circle"},
-	CurrentOption = nil,
+	Options = {"Toggle On/Off", "Filter Team", "Circle"},
+	CurrentOption = "Filter Team",
 	MultipleOptions = true,
 	Callback = function(Options)
-		silentaimbot = (Options[1] == "Toggle On/Off" or Options[2] == "Toggle On/Off")
-		circl.Visible = (Options[1] == "Circle" or Options[2] == "Circle")
+		silentaimbot = table.find(Options, "Toggle On/Off") ~= nil
+        filterteam = table.find(Options, "Filter Team") ~= nil
+		circl.Visible = table.find(Options, "Circle") ~= nil
 	end
 })
 
