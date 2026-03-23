@@ -487,17 +487,6 @@ local findRooms = visualTab:CreateToggle({
     end
 })
 
-local fullbright = visualTab:CreateButton({
-    Name = "Fullbright",
-    Callback = function()
-        Lighting.Brightness = 2
-	    Lighting.ClockTime = 14
-	    Lighting.FogEnd = 100000
-	    Lighting.GlobalShadows = false
-	    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
-    end
-})
-
 local vd = {}
 local visd = visualTab:CreateToggle({
     Name = "Debug View",
@@ -532,8 +521,16 @@ local visd = visualTab:CreateToggle({
     end
 })
 
-
-
+local fullbright = visualTab:CreateButton({
+    Name = "Fullbright",
+    Callback = function()
+        Lighting.Brightness = 2
+	    Lighting.ClockTime = 14
+	    Lighting.FogEnd = 100000
+	    Lighting.GlobalShadows = false
+	    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+    end
+})
 
 local function updatelabel(gui, label, textname:string, gamepass:boolean)
 	if not gui or not label or not textname then return end
