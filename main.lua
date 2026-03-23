@@ -500,7 +500,7 @@ local fullbright = visualTab:CreateButton({
 
 local vd = {}
 local visd = visualTab:CreateButton({
-    Name = "Visible Borders (Anti-Cheat Detectors)",
+    Name = "Debug View",
     Callback = function()
         local ds = 0
         for i, v in vd do
@@ -510,11 +510,21 @@ local visd = visualTab:CreateButton({
         for i, d in workspace:GetDescendants() do
             if d.Name == "Detector" and d:FindFirstChild("TouchInterest") and d.Transparency == 1 then
                 d.Transparency = 0.625
+                d.Color = Color3.new(0,0,1)
+                ds += 1
+                table.insert(vd, d)
+            elseif d.Name == "Death" then
+                d.Transparency = 0.5
+                d.Color = Color3.new(1,0,0)
+                ds += 1
+                table.insert(vd, d)
+            elseif d.Name == "InvisCollision" then 
+                d.Transparency = 0.25
                 ds += 1
                 table.insert(vd, d)
             end
         end
-        notif("Found "..ds.." Borders.")
+        notif("Found "..ds.." Parts.")
     end
 })
 
@@ -966,8 +976,8 @@ local function destroyrayfield()
         connection:Disconnect()
 		print("nuke", connection, "disconnected")
     end
-    task.wait(1.5)
 	print("rayfield destroying...")
+    task.wait(1.5)
     Rayfield:Destroy()
 end
 
