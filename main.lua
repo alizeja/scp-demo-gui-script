@@ -499,33 +499,36 @@ local fullbright = visualTab:CreateButton({
 })
 
 local vd = {}
-local visd = visualTab:CreateButton({
+local visd = visualTab:CreateToggle({
     Name = "Debug View",
-    Callback = function()
-        local ds = 0
+    CurrentValue = false,
+    Callback = function(Value)
         for i, v in vd do
             v.Transparency = 1
         end
         vd = {}
-        for i, d in workspace:GetDescendants() do
-            if not d:IsA("BasePart") then continue end
-            if d.Name == "Detector" and d:FindFirstChild("TouchInterest") and d.Transparency == 1 then
-                d.Transparency = 0.625
-                d.Color = Color3.new(0,0,1)
-                ds += 1
-                table.insert(vd, d)
-            elseif d.Name == "Death" then
-                d.Transparency = 0.5
-                d.Color = Color3.new(1,0,0)
-                ds += 1
-                table.insert(vd, d)
-            elseif d.Name == "InvisCollision" then 
-                d.Transparency = 0.25
-                ds += 1
-                table.insert(vd, d)
+        if Value then
+            local ds = 0
+            for i, d in workspace:GetDescendants() do
+                if not d:IsA("BasePart") then continue end
+                if d.Name == "Detector" and d:FindFirstChild("TouchInterest") and d.Transparency == 1 then
+                    d.Transparency = 0.625
+                    d.Color = Color3.new(0,0,1)
+                    ds += 1
+                    table.insert(vd, d)
+                elseif d.Name == "Death" then
+                    d.Transparency = 0.5
+                    d.Color = Color3.new(1,0,0)
+                    ds += 1
+                   table.insert(vd, d)
+                elseif d.Name == "InvisCollision" then 
+                    d.Transparency = 0.25
+                    ds += 1
+                    table.insert(vd, d)
+                end
             end
+            notif("Found "..ds.." Parts.")
         end
-        notif("Found "..ds.." Parts.")
     end
 })
 
@@ -960,11 +963,8 @@ local function destroyrayfield()
 	print("aimbot fully off")
     fastoldman = false
     print("faster old man off")
-    for i, v in vd do
-        v.Transparency = 1
-    end
-    vd = {}
-    print("set borders invisible again")
+    visd:Set(false)
+    print("debug view off")
 	if runLoop == true then
         RunService:UnbindFromRenderStep("Aimbot") 
 		print("aimbot unbinded")
