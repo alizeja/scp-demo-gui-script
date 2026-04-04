@@ -33,6 +33,8 @@ local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 PlaceId, JobId = game.PlaceId, game.JobId
 
 local Camera = workspace.CurrentCamera
@@ -49,9 +51,46 @@ local silentaimbot = false
 local filterteam = true
 local filtercds = true
 local resetafter = true
+local plresp = false
+local esp_tracers = false
+local esp_names = false
+local esp_boxes = false
+local esp_hl = true
+local esp_skeleton = false
 
+local espDrawings = {}
 local espelem = {}
 local exitelem = {}
+local R15Bones = {
+    {"Head", "UpperTorso"},
+    {"UpperTorso", "LowerTorso"},
+    {"LowerTorso", "HumanoidRootPart"},
+
+    {"UpperTorso", "LeftUpperArm"},
+    {"LeftUpperArm", "LeftLowerArm"},
+    {"LeftLowerArm", "LeftHand"},
+
+    {"UpperTorso", "RightUpperArm"},
+    {"RightUpperArm", "RightLowerArm"},
+    {"RightLowerArm", "RightHand"},
+
+    {"LowerTorso", "LeftUpperLeg"},
+    {"LeftUpperLeg", "LeftLowerLeg"},
+    {"LeftLowerLeg", "LeftFoot"},
+
+    {"LowerTorso", "RightUpperLeg"},
+    {"RightUpperLeg", "RightLowerLeg"},
+    {"RightLowerLeg", "RightFoot"},
+}
+local R6Bones = {
+    {"Head", "Torso"},
+    {"Torso", "HumanoidRootPart"},
+
+    {"Torso", "Left Arm"},
+    {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"},
+    {"Torso", "Right Leg"},
+}
 
 local runLoop
 local endconnections = {}
@@ -77,7 +116,7 @@ local function getRoot(char, humanoid)
     return char:FindFirstChild("HumanoidRootPart") or (humanoid and humanoid.RootPart)
 end
 
-local function sameTeam(plr)
+local function sameTeam(plr, isesp)
     local localteam = localplr.Team
 	local plrteam = plr.Team
 
@@ -85,14 +124,14 @@ local function sameTeam(plr)
 		return true
 	end
 	if localteam.Name == "Class D" or localteam.Name == "Chaos Insurgency" then
-		if plrteam.Name == "Class D" or plrteam.Name == "Chaos Insurgency" or (filtercds and localteam.Name == "Class D" and plrteam.Name == "Scientist") then
+		if plrteam.Name == "Class D" or plrteam.Name == "Chaos Insurgency" or (not isesp and filtercds and localteam.Name == "Class D" and plrteam.Name == "Scientist") then
 			return true
 		else
 			return false
 		end
 	end
 	if localteam.Name == "Scientist" or localteam.Name == "Mobile Task Force" then
-		if plrteam.Name == "Scientist" or plrteam.Name == "Mobile Task Force" or (filtercds and localteam.Name == "Scientist" and plrteam.Name == "Class D") then
+		if plrteam.Name == "Scientist" or plrteam.Name == "Mobile Task Force" or (not isesp and filtercds and localteam.Name == "Scientist" and plrteam.Name == "Class D") then
 			return true
 		else
 			return false
@@ -210,16 +249,95 @@ local function exit(child)
 	return (child:IsA("BasePart") and (child.Name == "Front" or child.Name == "HCZ") and (child.Parent.Name == "CheckptA" or child.Parent.Name == "CheckptB" or child.Parent.Name == "914" or child.Parent.Name == "South HCZ-EZ Checkpoint" or child.Parent.Name == "North HCZ-EZ Checkpoint" or child.Parent.Name == "GateA" or child.Parent.Name == "GateB" or child.Parent.Name == "Warhead" or child.Parent.Name == "049" or child.Parent.Name == "106"))
 end
 
+local function getBoundingBox(char)
+    local cf, size = char:GetBoundingBox()
+    return cf, size
+end
+
+local function hideSkeleton(drawings)
+    if drawings.Skeleton and drawings.Skeleton.Lines then
+        for _, line in ipairs(drawings.Skeleton.Lines) do
+            line.Visible = false
+        end
+    end
+end
+
+local function createESP(player)
+    local drawings = {
+        Line = Drawing.new("Line"),
+        Name = Drawing.new("Text"),
+        Box = Drawing.new("Square"),
+        Highlight = Instance.new("Highlight")
+    }
+    drawings.Skeleton = {
+        Lines = {},
+        Bones = {},
+        RigType = nil
+    }
+
+    drawings.Line.Thickness = 1
+    drawings.Line.Visible = false
+    drawings.Line.Color = Color3.new(1,1,1)
+
+    drawings.Name.Size = 13
+    drawings.Name.Center = true
+    drawings.Name.Outline = true
+    drawings.Name.Visible = false
+    drawings.Name.Color = Color3.new(1,1,1)
+
+    drawings.Box.Thickness = 1
+    drawings.Box.Filled = false
+    drawings.Box.Visible = false
+    drawings.Box.Color = Color3.new(1,1,1)
+
+    drawings.Highlight.Parent = CoreGui
+    drawings.Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    drawings.Highlight.Enabled = false
+    drawings.Highlight.FillColor = Color3.new(1,1,1)
+    drawings.Highlight.FillTransparency = 0.33
+    drawings.Highlight.OutlineColor = Color3.new(1,1,1)
+    drawings.Highlight.OutlineTransparency = 0.5
+
+    espDrawings[player] = drawings
+end
+
+local function removeESP(player)
+    local drawings = espDrawings[player]
+    if not drawings then return end
+
+    if drawings.Skeleton and drawings.Skeleton.Lines then
+        for _, line in ipairs(drawings.Skeleton.Lines) do
+            line:Remove()
+        end
+    end
+
+    if drawings.Line then drawings.Line:Remove() end
+    if drawings.Name then drawings.Name:Remove() end
+    if drawings.Box then drawings.Box:Remove() end
+    if drawings.Highlight then drawings.Highlight:Destroy() end
+
+    espDrawings[player] = nil
+end
+
 local circl = Drawing.new("Circle")
 circl.Radius = 200
 circl.Visible = false
 circl.Thickness = 2
 circl.Color = Color3.new(0,0,1)
 
+local reticle = Drawing.new("Circle")
+reticle.Visible = false
+reticle.Radius = 2
+reticle.Thickness = 1
+reticle.Filled = false
+reticle.Color = Color3.new(1,1,1)
+
 local trackedPlayers = {}
 
 local function trackPlayer(player)
 	if player == localplr then return end
+
+    createESP(player)
 
 	trackedPlayers[player] = {
 		Player = player,
@@ -227,10 +345,38 @@ local function trackPlayer(player)
 		Character = nil
 	}
 
-	local function onCharacter(char)
-		trackedPlayers[player].Character = char
+    local function onCharacter(char)
+        trackedPlayers[player].Character = char
         trackedPlayers[player].Head = char:WaitForChild("Head", 2)
-	end
+
+        local drawings = espDrawings[player]
+        if drawings and drawings.Highlight then
+            drawings.Highlight.Adornee = char
+        end
+
+        local rigType = char:FindFirstChild("UpperTorso") and "R15"
+            or char:FindFirstChild("Torso") and "R6"
+            or nil
+
+        if not rigType then return end
+
+        local bones = rigType == "R6" and R6Bones or R15Bones
+
+        drawings.Skeleton = {
+            Lines = {},
+            Bones = bones,
+            RigType = rigType
+        }
+
+        for i = 1, #bones do
+            local line = Drawing.new("Line")
+            line.Visible = false
+            line.Thickness = 1
+            line.Color = Color3.new(1,1,1)
+
+            drawings.Skeleton.Lines[i] = line
+        end
+    end
 
 	if player.Character then
 		onCharacter(player.Character)
@@ -239,21 +385,30 @@ local function trackPlayer(player)
 	player.CharacterAdded:Connect(onCharacter)
 
 	player.CharacterRemoving:Connect(function()
-		trackedPlayers[player].Character = nil
-		trackedPlayers[player].Head = nil
-	end)
+        if trackedPlayers[player] then
+            trackedPlayers[player].Character = nil
+            trackedPlayers[player].Head = nil
+            local drawings = espDrawings[player]
+            if drawings and drawings.Skeleton then
+                hideSkeleton(drawings)
+            end
+        end
+    end)
 end
 
 local function untrackPlayer(player)
 	trackedPlayers[player] = nil
+    removeESP(player)
 end
 
 for _, p in ipairs(Players:GetPlayers()) do
 	trackPlayer(p)
 end
 
-Players.PlayerAdded:Connect(trackPlayer)
-Players.PlayerRemoving:Connect(untrackPlayer)
+local pac = Players.PlayerAdded:Connect(trackPlayer)
+table.insert(endconnections, pac)
+local prc = Players.PlayerRemoving:Connect(untrackPlayer)
+table.insert(endconnections, prc)
 
 local function GetClosestHead()
 	local localChar = getChar(localplr)
@@ -398,7 +553,25 @@ local function getNukeVars()
     end
 end
 
-------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+local espd = visualTab:CreateDropdown({
+    Name = "Player ESP",
+    Options = {"Toggle", "Highlight", "Names", "Boxes", "Tracers", "Skeleton"},
+    CurrentOption = {"Highlight"},
+    MultipleOptions = true,
+    Callback = function(Options)
+        plresp = table.find(Options, "Toggle") ~= nil
+        esp_boxes = table.find(Options, "Boxes") ~= nil
+        esp_tracers = table.find(Options, "Tracers") ~= nil
+        esp_names = table.find(Options, "Names") ~= nil
+        esp_hl = table.find(Options, "Highlight") ~= nil
+        esp_skeleton = table.find(Options, "Skeleton") ~= nil
+    end
+})
 
 local itemEsp = visualTab:CreateToggle({
     Name = "Item Esp",
@@ -414,6 +587,14 @@ local itemEsp = visualTab:CreateToggle({
                 child:Destroy()
             end
         end
+    end
+})
+
+local reticletoggle = visualTab:CreateToggle({
+    Name = "Reticle",
+    CurrentValue = false,
+    Callback = function(Value)
+        reticle.Visible = Value
     end
 })
 
@@ -947,34 +1128,89 @@ local rj = settingsTab:CreateButton({
 
 local function destroyrayfield()
     print("Destroying...")
-	notif("Destroying...")
+    notif("Destroying...")
+
+    if runLoop == true then
+        RunService:UnbindFromRenderStep("Aimbot")
+        print("aimbot unbinded")
+
+        RunService:UnbindFromRenderStep("ESP")
+        print("esp unbinded")
+
+        RunService:UnbindFromRenderStep("Reticle")
+        print("reticle unbinded")
+    end
+
+    local nc = 0
+    for _, connection in pairs(endconnections) do
+        connection:Disconnect()
+        nc += 1
+    end
+    print(nc, "connections disconnected")
+
+    local nnc = 0
+    for _, connection in pairs(nukeconnections) do
+        connection:Disconnect()
+        nnc += 1
+    end
+    print(nnc, "nuke connections disconnected")
+
     itemEsp:Set(false)
-	print("item esp off")
+    print("item esp off")
+
+    reticletoggle:Set(false)
+    if reticle then
+        reticle:Remove()
+    end
+    print("reticle off")
+
     findRooms:Set(false)
-	print("find rooms off")
+    print("find rooms off")
+
     noFlash:Set(false)
-	print("no flash off")
+    print("no flash off")
+
     noShyGuy:Set(false)
-	print("no shy guy off")
+    print("no shy guy off")
+    
     toggleaimbot:Set({})
-	print("aimbot fully off")
+    if circl then
+        circl:Remove()
+    end
+    print("aimbot fully off")
+
+    espd:Set({})
+
+    local n = 0
+    for _, drawings in pairs(espDrawings) do
+        if drawings then
+            if drawings.Skeleton and drawings.Skeleton.Lines then
+                for _, line in ipairs(drawings.Skeleton.Lines) do
+                    pcall(function()
+                        line:Destroy()
+                        n += 1
+                    end)
+                end
+            end
+
+            for _, d in pairs(drawings) do
+                pcall(function()
+                    d:Destroy()
+                    n += 1
+                end)
+            end
+        end
+    end
+    print("destroyed", n, "drawings")
+    print("esp fully off")
+
     fastoldman = false
     print("faster old man off")
+
     visd:Set(false)
     print("debug view off")
-	if runLoop == true then
-        RunService:UnbindFromRenderStep("Aimbot") 
-		print("aimbot unbinded")
-    end
-    for i, connection in endconnections do
-        connection:Disconnect()
-		print(connection, "disconnected")
-    end
-    for i, connection in nukeconnections do
-        connection:Disconnect()
-		print("nuke", connection, "disconnected")
-    end
-	print("rayfield destroying...")
+
+    print("rayfield destroying...")
     task.wait(1.5)
     Rayfield:Destroy()
 end
@@ -1086,4 +1322,171 @@ RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, func
     
 	Camera.CFrame = CFrame.new(camPos, camPos + newDir)
 end)
+
+RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, function()
+    if not plresp then
+        for _, drawings in pairs(espDrawings) do
+            drawings.Line.Visible = false
+            drawings.Name.Visible = false
+            drawings.Box.Visible = false
+            drawings.Highlight.Enabled = false
+            for _, line in ipairs(drawings.Skeleton.Lines) do
+                line.Visible = false
+            end
+        end
+        return
+    end
+
+    local cam = Camera
+    local viewport = cam.ViewportSize
+    local camPos = cam.CFrame.Position
+    local screenCenter = Vector2.new(viewport.X / 2, viewport.Y)
+
+    for player, data in pairs(trackedPlayers) do
+        if player == localplr then continue end
+
+        local char = data.Character
+        local root = char and getRoot(char)
+        local drawings = espDrawings[player]
+
+        if not drawings or not char or not root or isDead(player) or (root and (camPos - root.Position).Magnitude > 300) then
+            if drawings then
+                drawings.Line.Visible = false
+                drawings.Name.Visible = false
+                drawings.Box.Visible = false
+                drawings.Highlight.Enabled = false
+                hideSkeleton(drawings)
+            end
+            continue
+        end
+
+        local teamColor = player.Team and player.Team.TeamColor.Color or Color3.new(1,1,1)
+        local rigType = char:FindFirstChild("UpperTorso") and "R15"
+            or char:FindFirstChild("Torso") and "R6"
+            or nil
+        local bones = rigType == "R6" and R6Bones or R15Bones
+
+        local rootPos, onScreen = cam:WorldToViewportPoint(root.Position)
+        if not onScreen then
+            drawings.Line.Visible = false
+            drawings.Name.Visible = false
+            drawings.Box.Visible = false
+            drawings.Highlight.Enabled = false
+            hideSkeleton(drawings)
+            continue
+        end
+
+        local screenPos = Vector2.new(rootPos.X, rootPos.Y)
+
+        if esp_boxes then
+            local cf, size = getBoundingBox(char)
+
+            local corners = {
+                Vector3.new(-1, -1, -1),
+                Vector3.new(-1, -1,  1),
+                Vector3.new(-1,  1, -1),
+                Vector3.new(-1,  1,  1),
+                Vector3.new( 1, -1, -1),
+                Vector3.new( 1, -1,  1),
+                Vector3.new( 1,  1, -1),
+                Vector3.new( 1,  1,  1),
+            }
+
+            local minX, minY = math.huge, math.huge
+            local maxX, maxY = -math.huge, -math.huge
+            local anyOnScreen = false
+
+            for _, corner in ipairs(corners) do
+                local worldPoint = cf:PointToWorldSpace(corner * size * 0.5)
+                local screenPoint, onScreen = cam:WorldToViewportPoint(worldPoint)
+
+                if onScreen then
+                    anyOnScreen = true
+                end
+
+                minX = math.min(minX, screenPoint.X)
+                minY = math.min(minY, screenPoint.Y)
+                maxX = math.max(maxX, screenPoint.X)
+                maxY = math.max(maxY, screenPoint.Y)
+            end
+
+            if anyOnScreen then
+                drawings.Box.Position = Vector2.new(minX, minY)
+                drawings.Box.Size = Vector2.new(maxX - minX, maxY - minY)
+                drawings.Box.Color = teamColor
+                drawings.Box.Visible = true
+            else
+                drawings.Box.Visible = false
+            end
+        else
+            drawings.Box.Visible = false
+        end
+
+        if esp_names then
+            drawings.Name.Text = player.Name
+            drawings.Name.Position = screenPos - Vector2.new(0, 15)
+            drawings.Name.Color = teamColor
+            drawings.Name.Visible = true
+        else
+            drawings.Name.Visible = false
+        end
+
+        if esp_tracers then
+            drawings.Line.From = screenCenter
+            drawings.Line.To = screenPos
+            drawings.Line.Color = teamColor
+            drawings.Line.Visible = true
+        else
+            drawings.Line.Visible = false
+        end
+
+        if esp_hl then
+            --drawings.Highlight.Adornee = char --adornee set in CharacterAdded
+            drawings.Highlight.FillColor = teamColor
+            task.defer(function()
+                if (camPos - root.Position).Magnitude > 300 then return end
+                drawings.Highlight.Enabled = true
+            end)
+        else
+            --drawings.Highlight.Adornee = nil --adornee set in CharacterAdded
+            drawings.Highlight.Enabled = false
+        end
+        
+        if esp_skeleton and drawings.Skeleton and drawings.Skeleton.Lines then
+            local bones = drawings.Skeleton.Bones
+            local lines = drawings.Skeleton.Lines
+
+            for i, bone in ipairs(bones) do
+                local part0 = char:FindFirstChild(bone[1])
+                local part1 = char:FindFirstChild(bone[2])
+
+                local line = lines[i]
+                if part0 and part1 and line then
+                    local p0, on0 = cam:WorldToViewportPoint(part0.Position)
+                    local p1, on1 = cam:WorldToViewportPoint(part1.Position)
+
+                   if on0 and on1 then
+                        line.From = Vector2.new(p0.X, p0.Y)
+                        line.To = Vector2.new(p1.X, p1.Y)
+                        line.Visible = true
+                    else
+                        line.Visible = false
+                    end
+                elseif line then
+                    line.Visible = false
+                end
+            end
+        else
+           hideSkeleton(drawings)
+        end
+
+    end
+end)
+
+RunService:BindToRenderStep("Reticle", Enum.RenderPriority.Last.Value, function()
+    local mpos = UserInputService:GetMouseLocation()
+
+    reticle.Position = Vector2.new(mpos.X, mpos.Y)
+end)
+
 runLoop = true
