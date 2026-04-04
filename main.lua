@@ -1444,7 +1444,9 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             --drawings.Highlight.Adornee = char --adornee set in CharacterAdded
             drawings.Highlight.FillColor = teamColor
             task.defer(function()
-                if (camPos - root.Position).Magnitude > 300 then return end
+                if (camPos - root.Position).Magnitude > 300 then
+                    drawings.Highlight.Enabled = false
+                end
                 drawings.Highlight.Enabled = true
             end)
         else
