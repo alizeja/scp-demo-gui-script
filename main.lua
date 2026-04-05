@@ -52,11 +52,13 @@ local filterteam = true
 local filtercds = true
 local resetafter = true
 local plresp = false
-local esp_tracers = false
+local esp_tracers = true
+local tracerOption = "From Mouse"
 local esp_names = false
 local esp_boxes = false
 local esp_hl = true
 local esp_skeleton = false
+local esp_distance = false
 
 local espDrawings = {}
 local espelem = {}
@@ -114,6 +116,11 @@ end
 local function getRoot(char, humanoid)
     if not humanoid then humanoid = getHuman(char) end
     return char:FindFirstChild("HumanoidRootPart") or (humanoid and humanoid.RootPart)
+end
+local function getRigType(char)
+    return char:FindFirstChild("UpperTorso") and "R15"
+            or char:FindFirstChild("Torso") and "R6"
+            or nil
 end
 
 local function sameTeam(plr, isesp)
@@ -267,7 +274,8 @@ local function createESP(player)
         Line = Drawing.new("Line"),
         Name = Drawing.new("Text"),
         Box = Drawing.new("Square"),
-        Highlight = Instance.new("Highlight")
+        Highlight = Instance.new("Highlight"),
+        Distance = Drawing.new("Text")
     }
     drawings.Skeleton = {
         Lines = {},
@@ -284,6 +292,12 @@ local function createESP(player)
     drawings.Name.Outline = true
     drawings.Name.Visible = false
     drawings.Name.Color = Color3.new(1,1,1)
+    
+    drawings.Distance.Size = 13
+    drawings.Distance.Center = true
+    drawings.Distance.Outline = true
+    drawings.Distance.Visible = false
+    drawings.Distance.Color = Color3.new(1,1,1)
 
     drawings.Box.Thickness = 1
     drawings.Box.Filled = false
@@ -307,14 +321,15 @@ local function removeESP(player)
 
     if drawings.Skeleton and drawings.Skeleton.Lines then
         for _, line in ipairs(drawings.Skeleton.Lines) do
-            line:Remove()
+            line:Destroy()
         end
     end
 
-    if drawings.Line then drawings.Line:Remove() end
-    if drawings.Name then drawings.Name:Remove() end
-    if drawings.Box then drawings.Box:Remove() end
+    if drawings.Line then drawings.Line:Destroy() end
+    if drawings.Name then drawings.Name:Destroy() end
+    if drawings.Box then drawings.Box:Destroy() end
     if drawings.Highlight then drawings.Highlight:Destroy() end
+    if drawings.Distance then drawings.Distance:Destroy() end
 
     espDrawings[player] = nil
 end
@@ -348,6 +363,8 @@ local function trackPlayer(player)
     local function onCharacter(char)
         trackedPlayers[player].Character = char
         trackedPlayers[player].Head = char:WaitForChild("Head", 2)
+        trackedPlayers[player].Root = getRoot(char)
+        trackedPlayers[player].RigType = getRigType(char)
 
         local drawings = espDrawings[player]
         if drawings and drawings.Highlight then
@@ -560,8 +577,8 @@ end
 
 local espd = visualTab:CreateDropdown({
     Name = "Player ESP",
-    Options = {"Toggle", "Highlight", "Names", "Boxes", "Tracers", "Skeleton"},
-    CurrentOption = {"Highlight"},
+    Options = {"Toggle", "Highlight", "Names", "Boxes", "Tracers", "Skeleton", "Distance"},
+    CurrentOption = {"Highlight", "Tracers"},
     MultipleOptions = true,
     Callback = function(Options)
         plresp = table.find(Options, "Toggle") ~= nil
@@ -570,6 +587,17 @@ local espd = visualTab:CreateDropdown({
         esp_names = table.find(Options, "Names") ~= nil
         esp_hl = table.find(Options, "Highlight") ~= nil
         esp_skeleton = table.find(Options, "Skeleton") ~= nil
+        esp_distance = table.find(Options, "Distance") ~= nil
+    end
+})
+
+visualTab:CreateDropdown({
+    Name = "Tracer ESP Options",
+    Options = {"From Bottom", "From Top", "From Center", "From Mouse"},
+    CurrentOption = {"From Mouse"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        tracerOption = Options[1]
     end
 })
 
@@ -801,11 +829,11 @@ updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
 
 local toggleaimbot = mainTab:CreateDropdown({
 	Name = "Aimbot (Buggy)",
-	Options = {"Toggle On/Off", "Filter Team", "Filter Class D/Scientist", "Circle"},
+	Options = {"Toggle", "Filter Team", "Filter Class D/Scientist", "Circle"},
 	CurrentOption = {"Filter Team", "Filter Class D/Scientist"},
 	MultipleOptions = true,
 	Callback = function(Options)
-		silentaimbot = table.find(Options, "Toggle On/Off") ~= nil
+		silentaimbot = table.find(Options, "Toggle") ~= nil
         filterteam = table.find(Options, "Filter Team") ~= nil
         filtercds = table.find(Options, "Filter Class D/Scientist") ~= nil
 		circl.Visible = table.find(Options, "Circle") ~= nil
@@ -966,7 +994,7 @@ local aimbotk = bindsTab:CreateKeybind({
     Callback = function(Keybind)
         local options = {}
         if not silentaimbot then
-            table.insert(options, "Toggle On/Off")
+            table.insert(options, "Toggle")
         end
         if filtercds then
             table.insert(options, "Filter Class D/Scientist")
@@ -979,6 +1007,38 @@ local aimbotk = bindsTab:CreateKeybind({
         end
 
         toggleaimbot:Set(options)
+    end
+})
+
+local espk = bindsTab:CreateKeybind({
+    Name = "Toggle ESP",
+    CurrentKeybind = "O",
+    HoldToInteract = false,
+    Callback = function(Keybind)
+        local options = {}
+        if not plresp then
+            table.insert(options, "Toggle")
+        end
+        if esp_boxes then
+            table.insert(options, "Boxes")
+        end
+        if esp_names then
+            table.insert(options, "Names")
+        end
+        if esp_tracers then
+            table.insert(options, "Tracers")
+        end
+        if esp_hl then
+            table.insert(options, "Highlight")
+        end
+        if esp_skeleton then
+            table.insert(options, "Skeleton")
+        end
+        if esp_distance then
+            table.insert(options, "Distance")
+        end
+
+        espd:Set(options)
     end
 })
 
@@ -1323,16 +1383,22 @@ RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, func
 	Camera.CFrame = CFrame.new(camPos, camPos + newDir)
 end)
 
+local lastUpdate = 0
+local RATE = 1/30
+
 RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, function()
+    local now = tick()
+    if now - lastUpdate < RATE then return end
+    lastUpdate = now
+
     if not plresp then
         for _, drawings in pairs(espDrawings) do
             drawings.Line.Visible = false
             drawings.Name.Visible = false
             drawings.Box.Visible = false
             drawings.Highlight.Enabled = false
-            for _, line in ipairs(drawings.Skeleton.Lines) do
-                line.Visible = false
-            end
+            drawings.Distance.Visible = false
+            hideSkeleton(drawings)
         end
         return
     end
@@ -1340,30 +1406,32 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
     local cam = Camera
     local viewport = cam.ViewportSize
     local camPos = cam.CFrame.Position
-    local screenCenter = Vector2.new(viewport.X / 2, viewport.Y)
+    local screenBottom = Vector2.new(viewport.X / 2, viewport.Y)
+    local screenCenter = Vector2.new(viewport.X / 2, viewport.Y / 2)
+    local screenTop = Vector2.new(viewport.X / 2, 0)
 
     for player, data in pairs(trackedPlayers) do
         if player == localplr then continue end
 
         local char = data.Character
-        local root = char and getRoot(char)
+        local root = data.Root
+        local rigType = data.RigType
         local drawings = espDrawings[player]
+        local dist: number = root and (camPos - root.Position).Magnitude
 
-        if not drawings or not char or not root or isDead(player) or (root and (camPos - root.Position).Magnitude > 750) then
+        if not drawings or not char or not root or isDead(player) or not rigType or (root and dist > 750) then
             if drawings then
                 drawings.Line.Visible = false
                 drawings.Name.Visible = false
                 drawings.Box.Visible = false
                 drawings.Highlight.Enabled = false
+                drawings.Distance.Visible = false
                 hideSkeleton(drawings)
             end
             continue
         end
 
         local teamColor = player.Team and player.Team.TeamColor.Color or Color3.new(1,1,1)
-        local rigType = char:FindFirstChild("UpperTorso") and "R15"
-            or char:FindFirstChild("Torso") and "R6"
-            or nil
         local bones = rigType == "R6" and R6Bones or R15Bones
 
         local rootPos, onScreen = cam:WorldToViewportPoint(root.Position)
@@ -1372,6 +1440,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Name.Visible = false
             drawings.Box.Visible = false
             drawings.Highlight.Enabled = false
+            drawings.Distance.Visible = false
             hideSkeleton(drawings)
             continue
         end
@@ -1424,7 +1493,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
 
         if esp_names then
             drawings.Name.Text = player.Name
-            drawings.Name.Position = screenPos - Vector2.new(0, 15)
+            drawings.Name.Position = screenPos - Vector2.new(0, 20)
             drawings.Name.Color = teamColor
             drawings.Name.Visible = true
         else
@@ -1432,7 +1501,17 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         end
 
         if esp_tracers then
-            drawings.Line.From = screenCenter
+            if tracerOption == "From Bottom" then
+               drawings.Line.From = screenBottom
+            elseif tracerOption == "From Center" then
+                drawings.Line.From = screenCenter
+            elseif tracerOption == "From Top" then
+                drawings.Line.From = screenTop
+            elseif tracerOption == "From Mouse" then 
+                drawings.Line.From = reticle.Position
+            else
+                drawings.Line.From = screenBottom
+            end
             drawings.Line.To = screenPos
             drawings.Line.Color = teamColor
             drawings.Line.Visible = true
@@ -1441,47 +1520,63 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         end
 
         if esp_hl then
-            --drawings.Highlight.Adornee = char --adornee set in CharacterAdded
+            if not drawings.Highlight.Adornee then
+                drawings.Highlight.Adornee = char
+            end
             drawings.Highlight.FillColor = teamColor
             task.defer(function()
-                if (camPos - root.Position).Magnitude > 750 then
+                if dist > 350 or dist < 15 then
                     drawings.Highlight.Enabled = false
                 end
                 drawings.Highlight.Enabled = true
             end)
         else
-            --drawings.Highlight.Adornee = nil --adornee set in CharacterAdded
+            if drawings.Highlight.Adornee then
+                drawings.Highlight.Adornee = nil
+            end
             drawings.Highlight.Enabled = false
         end
         
         if esp_skeleton and drawings.Skeleton and drawings.Skeleton.Lines then
-            local bones = drawings.Skeleton.Bones
-            local lines = drawings.Skeleton.Lines
+            if dist <= 350 and dist > 10 then
+                local bones = drawings.Skeleton.Bones
+                local lines = drawings.Skeleton.Lines
 
-            for i, bone in ipairs(bones) do
-                local part0 = char:FindFirstChild(bone[1])
-                local part1 = char:FindFirstChild(bone[2])
+                for i, bone in ipairs(bones) do
+                    local part0 = char:FindFirstChild(bone[1])
+                    local part1 = char:FindFirstChild(bone[2])
 
-                local line = lines[i]
-                if part0 and part1 and line then
-                    local p0, on0 = cam:WorldToViewportPoint(part0.Position)
-                    local p1, on1 = cam:WorldToViewportPoint(part1.Position)
+                    local line = lines[i]
+                    if part0 and part1 and line then
+                        local p0, on0 = cam:WorldToViewportPoint(part0.Position)
+                        local p1, on1 = cam:WorldToViewportPoint(part1.Position)
 
-                   if on0 and on1 then
-                        line.From = Vector2.new(p0.X, p0.Y)
-                        line.To = Vector2.new(p1.X, p1.Y)
-                        line.Visible = true
-                    else
+                       if on0 and on1 then
+                            line.From = Vector2.new(p0.X, p0.Y)
+                            line.To = Vector2.new(p1.X, p1.Y)
+                            line.Visible = true
+                        else
+                            line.Visible = false
+                        end
+                    elseif line then
                         line.Visible = false
                     end
-                elseif line then
-                    line.Visible = false
                 end
+            else
+                hideSkeleton(drawings)
             end
         else
            hideSkeleton(drawings)
         end
 
+        if esp_distance then
+            drawings.Distance.Text = "Distance: "..math.floor(dist)
+            drawings.Distance.Position = screenPos - Vector2.new(0, 10)
+            drawings.Distance.Color = teamColor
+            drawings.Distance.Visible = true
+        else
+            drawings.Distance.Visible = false
+        end
     end
 end)
 
