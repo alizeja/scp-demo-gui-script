@@ -1349,7 +1349,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         local root = char and getRoot(char)
         local drawings = espDrawings[player]
 
-        if not drawings or not char or not root or isDead(player) or (root and (camPos - root.Position).Magnitude > 300) then
+        if not drawings or not char or not root or isDead(player) or (root and (camPos - root.Position).Magnitude > 750) then
             if drawings then
                 drawings.Line.Visible = false
                 drawings.Name.Visible = false
@@ -1444,7 +1444,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             --drawings.Highlight.Adornee = char --adornee set in CharacterAdded
             drawings.Highlight.FillColor = teamColor
             task.defer(function()
-                if (camPos - root.Position).Magnitude > 300 then
+                if (camPos - root.Position).Magnitude > 750 then
                     drawings.Highlight.Enabled = false
                 end
                 drawings.Highlight.Enabled = true
