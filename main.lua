@@ -201,7 +201,7 @@ local function find(child)
 		b.Adornee = handle
 		b.AlwaysOnTop = true
 		b.ZIndex = 10
-		b.Transparency = 0.5
+		b.Transparency = .5
         table.insert(espelem, b)
 
 		
@@ -243,7 +243,7 @@ local function find(child)
                 local value = math.clamp(charge.Value, 0, 1)
                 ccolor = Color3.new(value, value, value)
                 b.Color3 = ccolor
-                b.Transparency = 0.5 + (1 - value) * 0.25
+                b.Transparency = .5 + (1 - value) * .25
             end
             microCharge()
 
@@ -298,6 +298,8 @@ local function createESP(player)
     drawings.Distance.Outline = true
     drawings.Distance.Visible = false
     drawings.Distance.Color = Color3.new(1,1,1)
+    drawings._lastDist = nil
+    drawings._lastDistUpdate = 0
 
     drawings.Box.Thickness = 1
     drawings.Box.Filled = false
@@ -308,9 +310,9 @@ local function createESP(player)
     drawings.Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     drawings.Highlight.Enabled = false
     drawings.Highlight.FillColor = Color3.new(1,1,1)
-    drawings.Highlight.FillTransparency = 0.33
+    drawings.Highlight.FillTransparency = .33
     drawings.Highlight.OutlineColor = Color3.new(1,1,1)
-    drawings.Highlight.OutlineTransparency = 0.5
+    drawings.Highlight.OutlineTransparency = .5
 
     espDrawings[player] = drawings
 end
@@ -677,7 +679,7 @@ local findRooms = visualTab:CreateToggle({
         	    	b.Adornee = handle
         	    	b.AlwaysOnTop = true
         	    	b.ZIndex = 10
-	            	b.Transparency = 0.5
+	            	b.Transparency = .5
                     table.insert(exitelem, b)
 
         	    	if handle.Parent.Name == "049" or handle.Parent.Name == "Warhead" or handle.Parent.Name == "914" or handle.Parent.Name == "106" then
@@ -725,17 +727,17 @@ local visd = visualTab:CreateToggle({
             for i, d in workspace:GetDescendants() do
                 if not d:IsA("BasePart") then continue end
                 if d.Name == "Detector" and d:FindFirstChild("TouchInterest") and d.Transparency == 1 then
-                    d.Transparency = 0.625
+                    d.Transparency = .625
                     d.Color = Color3.new(0,0,1)
                     ds += 1
                     table.insert(vd, d)
                 elseif d.Name == "Death" then
-                    d.Transparency = 0.5
+                    d.Transparency = .5
                     d.Color = Color3.new(1,0,0)
                     ds += 1
                    table.insert(vd, d)
                 elseif d.Name == "InvisCollision" or d.Name == "Barrier" then 
-                    d.Transparency = 0.25
+                    d.Transparency = .25
                     ds += 1
                     table.insert(vd, d)
                 end
@@ -1235,7 +1237,7 @@ local function destroyrayfield()
 
     reticletoggle:Set(false)
     if reticle then
-        reticle:Remove()
+        reticle:Destroy()
     end
     print("reticle off")
 
@@ -1250,7 +1252,7 @@ local function destroyrayfield()
     
     toggleaimbot:Set({})
     if circl then
-        circl:Remove()
+        circl:Destroy()
     end
     print("aimbot fully off")
 
@@ -1355,7 +1357,7 @@ table.insert(endconnections, dagc)
 
 
 local currentTarget = nil
-local dz = 0.004
+local dz = .004
 
 RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	circl.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
@@ -1379,7 +1381,7 @@ RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, func
 	local camPos = camCF.Position
 
     local velocity = currentTarget.AssemblyLinearVelocity
-    local predictedPos = currentTarget.Position + velocity * 0.05
+    local predictedPos = currentTarget.Position + velocity * .05
 
 	local targetDir = (predictedPos - camPos).Unit
 	local currentDir = camCF.LookVector
@@ -1387,7 +1389,7 @@ RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, func
     if diff < dz then
 	    return
     end
-    if diff < 0.125 then
+    if diff < .125 then
         Camera.CFrame = CFrame.new(camPos, currentTarget.Position)
 	    return
     end
@@ -1400,6 +1402,8 @@ end)
 
 local lastUpdate = 0
 local RATE = 1/30
+local dSuffix = "Distance: "
+local dRATE = 1/10
 
 RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, function()
     local now = tick()
@@ -1433,7 +1437,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         local root = data.Root
         local rigType = data.RigType
         local drawings = espDrawings[player]
-        local dist: number = root and (camPos - root.Position).Magnitude
+        local dist: number = root and math.floor((camPos - root.Position).Magnitude * 10 + .5) / 10
 
         if not drawings or not char or not root or isDead(player) or not rigType or (root and dist > 750) then
             if drawings then
@@ -1483,7 +1487,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             local anyOnScreen = false
 
             for _, corner in ipairs(corners) do
-                local worldPoint = cf:PointToWorldSpace(corner * size * 0.5)
+                local worldPoint = cf:PointToWorldSpace(corner * size * .5)
                 local screenPoint, onScreen = cam:WorldToViewportPoint(worldPoint)
 
                 if onScreen then
@@ -1600,7 +1604,18 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         end
 
         if esp_distance then
-            drawings.Distance.Text = "Distance: "..math.floor(dist)
+            local now = tick()
+            if now - drawings._lastDistUpdate > dRATE then --added this just to optimize the text! im so pro
+                drawings._lastDistUpdate = now
+                
+                local newDist = math.floor((camPos - root.Position).Magnitude * 10 + .5) / 10
+
+                if not drawings._lastDist or math.abs(drawings._lastDist - newDist) >= .1 then
+                    drawings._lastDist = newDist
+                    drawings.Distance.Text = dSuffix..newDist
+                end
+            end
+
             drawings.Distance.Position = screenPos - Vector2.new(0, 40)
             drawings.Distance.Color = teamColor
             drawings.Distance.Visible = true
