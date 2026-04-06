@@ -593,11 +593,26 @@ local espd = visualTab:CreateDropdown({
 
 visualTab:CreateDropdown({
     Name = "Tracer ESP Options",
-    Options = {"From Bottom", "From Top", "From Center", "From Mouse"},
+    Options = {"From Bottom", "From Top", "From Center", "From Mouse", "From Character"},
     CurrentOption = {"From Mouse"},
     MultipleOptions = false,
     Callback = function(Options)
         tracerOption = Options[1]
+    end
+})
+visualTab:CreateButton({
+    Name = "Reload ESP",
+    Callback = function(Value)
+        for _, p in Players:GetPlayers() do
+            task.spawn(function()
+                print(p)
+                removeESP(p)
+                task.delay(#Players:GetPlayers() / 10, function()
+                    createESP(p)
+                end)
+            end)
+        end
+        espDrawings = {}
     end
 })
 
@@ -1271,7 +1286,7 @@ local function destroyrayfield()
     print("debug view off")
 
     print("rayfield destroying...")
-    task.wait(1.5)
+    task.wait(1)
     Rayfield:Destroy()
 end
 
@@ -1404,8 +1419,9 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
     end
 
     local cam = Camera
+    local camCF = cam.CFrame
+    local camPos = camCF.Position
     local viewport = cam.ViewportSize
-    local camPos = cam.CFrame.Position
     local screenBottom = Vector2.new(viewport.X / 2, viewport.Y)
     local screenCenter = Vector2.new(viewport.X / 2, viewport.Y / 2)
     local screenTop = Vector2.new(viewport.X / 2, 0)
@@ -1435,6 +1451,8 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         local bones = rigType == "R6" and R6Bones or R15Bones
 
         local rootPos, onScreen = cam:WorldToViewportPoint(root.Position)
+        local screenPos = Vector2.new(rootPos.X, rootPos.Y)
+
         if not onScreen then
             drawings.Line.Visible = false
             drawings.Name.Visible = false
@@ -1445,7 +1463,6 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             continue
         end
 
-        local screenPos = Vector2.new(rootPos.X, rootPos.Y)
 
         if esp_boxes then
             local cf, size = getBoundingBox(char)
@@ -1493,7 +1510,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
 
         if esp_names then
             drawings.Name.Text = player.Name
-            drawings.Name.Position = screenPos - Vector2.new(0, 20)
+            drawings.Name.Position = screenPos - Vector2.new(0, 50)
             drawings.Name.Color = teamColor
             drawings.Name.Visible = true
         else
@@ -1509,6 +1526,19 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
                 drawings.Line.From = screenTop
             elseif tracerOption == "From Mouse" then 
                 drawings.Line.From = reticle.Position
+            elseif tracerOption == "From Character" then
+                local r = getRoot(getChar(localplr))
+                if r then
+                    local rp, v = Camera:WorldToViewportPoint(r.Position)
+
+                    if v then
+                        drawings.Line.From = Vector2.new(rp.X, rp.Y)
+                    else
+                        local x = math.clamp(rp.X, 0, viewport.X)
+                        local y = math.clamp(rp.Y, 0, viewport.Y)
+                        drawings.Line.From = Vector2.new(x, y)
+                    end
+                end
             else
                 drawings.Line.From = screenBottom
             end
@@ -1571,7 +1601,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
 
         if esp_distance then
             drawings.Distance.Text = "Distance: "..math.floor(dist)
-            drawings.Distance.Position = screenPos - Vector2.new(0, 10)
+            drawings.Distance.Position = screenPos - Vector2.new(0, 40)
             drawings.Distance.Color = teamColor
             drawings.Distance.Visible = true
         else
