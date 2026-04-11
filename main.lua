@@ -462,7 +462,7 @@ local function GetClosestHead()
 	local dist = circl.Radius
 
 	for player, data in pairs(trackedPlayers) do
-        if filterteam and sameTeam(player) then continue end
+        if filterteam and sameTeam(data) then continue end
 		local head = data.Head
 		local char = data.Character
 
