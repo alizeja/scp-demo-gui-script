@@ -112,11 +112,11 @@ local function getChar(plr)
     return plr.Character or plr.CharacterAdded:Wait()
 end
 local function getHuman(char)
-    return char:FindFirstChildOfClass("Humanoid")
+    return char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 2)
 end
 local function getRoot(char, humanoid)
     if not humanoid then humanoid = getHuman(char) end
-    return char:FindFirstChild("HumanoidRootPart") or (humanoid and humanoid.RootPart)
+    return char:FindFirstChild("HumanoidRootPart") or (humanoid and humanoid.RootPart) or char:WaitForChild("HumanoidRootPart", 2)
 end
 local function getRigType(char)
     return char:FindFirstChild("UpperTorso") and "R15"
@@ -331,19 +331,20 @@ end
 local function removeESP(player)
     local drawings = espDrawings[player]
     if not drawings then return end
+    print("removing esp from:", player)
 
     if drawings.Skeleton and drawings.Skeleton.Lines then
         for _, line in ipairs(drawings.Skeleton.Lines) do
-            line:Destroy()
+            line:Remove()
         end
     end
 
-    if drawings.Line then drawings.Line:Destroy() end
-    if drawings.Name then drawings.Name:Destroy() end
-    if drawings.Box then drawings.Box:Destroy() end
-    if drawings.Highlight then drawings.Highlight:Destroy() end
-    if drawings.Distance then drawings.Distance:Destroy() end
-    if drawings.Health then drawings.Health:Destroy() end
+    if drawings.Line then drawings.Line:Remove(); drawings.Line:Remove() end
+    if drawings.Name then drawings.Name:Remove() end
+    if drawings.Box then drawings.Box:Remove() end
+    if drawings.Highlight then drawings.Highlight:Remove() end
+    if drawings.Distance then drawings.Distance:Remove() end
+    if drawings.Health then drawings.Health:Remove() end
 
     espDrawings[player] = nil
 end
@@ -370,8 +371,11 @@ local function trackPlayer(player)
 
 	trackedPlayers[player] = {
 		Player = player,
+		Character = nil,
 		Head = nil,
-		Character = nil
+        Root = nil,
+        RigType = nil,
+        Humanoid = nil
 	}
 
     local function onCharacter(char)
@@ -647,6 +651,10 @@ local itemEsp = visualTab:CreateToggle({
             end
         else
             for i, child in espelem do
+                if typeof(child) == "userdata" then
+                    child:Remove()
+                    continue
+                end
                 child:Destroy()
             end
         end
@@ -1258,7 +1266,7 @@ local function destroyrayfield()
 
     reticletoggle:Set(false)
     if reticle then
-        reticle:Destroy()
+        reticle:Remove()
     end
     print("reticle fully off")
 
@@ -1273,7 +1281,7 @@ local function destroyrayfield()
     
     toggleaimbot:Set({})
     if circl then
-        circl:Destroy()
+        circl:Remove()
     end
     print("aimbot fully off")
 
@@ -1285,7 +1293,7 @@ local function destroyrayfield()
             if drawings.Skeleton and drawings.Skeleton.Lines then
                 for _, line in ipairs(drawings.Skeleton.Lines) do
                     pcall(function()
-                        line:Destroy()
+                        line:Remove()
                         n += 1
                     end)
                 end
@@ -1293,7 +1301,11 @@ local function destroyrayfield()
 
             for _, d in pairs(drawings) do
                 pcall(function()
-                    d:Destroy()
+                    if typeof(d) == "Instance" then
+                        d:Destroy()
+                    else
+                        d:Remove()
+                    end
                     n += 1
                 end)
             end
@@ -1424,7 +1436,7 @@ RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, func
 end)
 
 local lastUpdate = 0
-local RATE = 1/30
+local RATE = 1/20
 local dSuffix = "Distance: "
 local dRATE = 1/10
 local hSuffix = "Health: "
@@ -1466,7 +1478,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         local drawings = espDrawings[player]
         local dist: number = root and math.floor((camPos - root.Position).Magnitude * 10 + .5) / 10
 
-        if not drawings or not char or not root or isDead(player) or not rigType or (root and dist > 750) then
+        if not drawings or not char or isDead(player) or (root and dist > 750) then
             if drawings then
                 drawings.Line.Visible = false
                 drawings.Name.Visible = false
