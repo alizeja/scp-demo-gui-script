@@ -339,7 +339,7 @@ local function removeESP(player)
         end
     end
 
-    if drawings.Line then drawings.Line:Remove(); drawings.Line:Remove() end
+    if drawings.Line then drawings.Line:Remove() end
     if drawings.Name then drawings.Name:Remove() end
     if drawings.Box then drawings.Box:Remove() end
     if drawings.Highlight then drawings.Highlight:Remove() end
