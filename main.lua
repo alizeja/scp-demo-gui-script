@@ -59,6 +59,7 @@ local esp_boxes = false
 local esp_hl = true
 local esp_skeleton = false
 local esp_distance = false
+local esp_health = false
 
 local espDrawings = {}
 local espelem = {}
@@ -149,10 +150,11 @@ end
 
 local function isDead(plr)
     local plrchar = getChar(plr)
-    local humanoid = getHuman(plrchar)
+    local humanoid = plrchar and getHuman(plrchar)
+    local fakeHp = humanoid:GetAttribute("Health")
 
 	if plrchar and humanoid then
-		return humanoid:GetState() == Enum.HumanoidStateType.Dead
+		return (fakeHp and fakeHp <= 0) or (humanoid and humanoid:GetState() == Enum.HumanoidStateType.Dead) or plrchar == nil
 	end
 end
 
@@ -275,7 +277,8 @@ local function createESP(player)
         Name = Drawing.new("Text"),
         Box = Drawing.new("Square"),
         Highlight = Instance.new("Highlight"),
-        Distance = Drawing.new("Text")
+        Distance = Drawing.new("Text"),
+        Health = Drawing.new("Text")
     }
     drawings.Skeleton = {
         Lines = {},
@@ -314,6 +317,14 @@ local function createESP(player)
     drawings.Highlight.OutlineColor = Color3.new(1,1,1)
     drawings.Highlight.OutlineTransparency = .5
 
+    drawings.Health.Size = 13
+    drawings.Health.Center = true
+    drawings.Health.Outline = true
+    drawings.Health.Visible = false
+    drawings.Health.Color = Color3.new(1,1,1)
+    drawings._lastHp = nil
+    drawings._lastHpUpdate = 0
+
     espDrawings[player] = drawings
 end
 
@@ -332,6 +343,7 @@ local function removeESP(player)
     if drawings.Box then drawings.Box:Destroy() end
     if drawings.Highlight then drawings.Highlight:Destroy() end
     if drawings.Distance then drawings.Distance:Destroy() end
+    if drawings.Health then drawings.Health:Destroy() end
 
     espDrawings[player] = nil
 end
@@ -367,6 +379,7 @@ local function trackPlayer(player)
         trackedPlayers[player].Head = char:WaitForChild("Head", 2)
         trackedPlayers[player].Root = getRoot(char)
         trackedPlayers[player].RigType = getRigType(char)
+        trackedPlayers[player].Humanoid = getHuman(char)
 
         local drawings = espDrawings[player]
         if drawings and drawings.Highlight then
@@ -407,6 +420,9 @@ local function trackPlayer(player)
         if trackedPlayers[player] then
             trackedPlayers[player].Character = nil
             trackedPlayers[player].Head = nil
+            trackedPlayers[player].Root = nil
+            trackedPlayers[player].RigType = nil
+            trackedPlayers[player].Humanoid = nil
             local drawings = espDrawings[player]
             if drawings and drawings.Skeleton then
                 hideSkeleton(drawings)
@@ -579,7 +595,7 @@ end
 
 local espd = visualTab:CreateDropdown({
     Name = "Player ESP",
-    Options = {"Toggle", "Highlight", "Names", "Boxes", "Tracers", "Skeleton", "Distance"},
+    Options = {"Toggle", "Highlight", "Names", "Boxes", "Tracers", "Skeleton", "Distance", "Health"},
     CurrentOption = {"Highlight", "Tracers"},
     MultipleOptions = true,
     Callback = function(Options)
@@ -590,6 +606,7 @@ local espd = visualTab:CreateDropdown({
         esp_hl = table.find(Options, "Highlight") ~= nil
         esp_skeleton = table.find(Options, "Skeleton") ~= nil
         esp_distance = table.find(Options, "Distance") ~= nil
+        esp_health = table.find(Options, "Health") ~= nil
     end
 })
 
@@ -1054,6 +1071,9 @@ local espk = bindsTab:CreateKeybind({
         if esp_distance then
             table.insert(options, "Distance")
         end
+        if esp_health then
+            table.insert(options, "Health")
+        end
 
         espd:Set(options)
     end
@@ -1239,7 +1259,7 @@ local function destroyrayfield()
     if reticle then
         reticle:Destroy()
     end
-    print("reticle off")
+    print("reticle fully off")
 
     findRooms:Set(false)
     print("find rooms off")
@@ -1362,6 +1382,8 @@ local dz = .004
 RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	circl.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
+    local cam = Camera or workspace.CurrentCamera
+
 	if not silentaimbot then
 		currentTarget = nil
 		return
@@ -1404,6 +1426,8 @@ local lastUpdate = 0
 local RATE = 1/30
 local dSuffix = "Distance: "
 local dRATE = 1/10
+local hSuffix = "Health: "
+local hRATE = 1/1
 
 RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, function()
     local now = tick()
@@ -1417,12 +1441,13 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Box.Visible = false
             drawings.Highlight.Enabled = false
             drawings.Distance.Visible = false
+            drawings.Health.Visible = false
             hideSkeleton(drawings)
         end
         return
     end
 
-    local cam = Camera
+    local cam = Camera or workspace.CurrentCamera
     local camCF = cam.CFrame
     local camPos = camCF.Position
     local viewport = cam.ViewportSize
@@ -1436,6 +1461,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         local char = data.Character
         local root = data.Root
         local rigType = data.RigType
+        local h = data.Humanoid
         local drawings = espDrawings[player]
         local dist: number = root and math.floor((camPos - root.Position).Magnitude * 10 + .5) / 10
 
@@ -1446,6 +1472,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
                 drawings.Box.Visible = false
                 drawings.Highlight.Enabled = false
                 drawings.Distance.Visible = false
+                drawings.Health.Visible = false
                 hideSkeleton(drawings)
             end
             continue
@@ -1463,6 +1490,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Box.Visible = false
             drawings.Highlight.Enabled = false
             drawings.Distance.Visible = false
+            drawings.Health.Visible = false
             hideSkeleton(drawings)
             continue
         end
@@ -1605,7 +1633,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
 
         if esp_distance then
             local now = tick()
-            if now - drawings._lastDistUpdate > dRATE then --added this just to optimize the text! im so pro
+            if now - drawings._lastDistUpdate > dRATE then
                 drawings._lastDistUpdate = now
                 
                 local newDist = math.floor((camPos - root.Position).Magnitude * 10 + .5) / 10
@@ -1621,6 +1649,26 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Distance.Visible = true
         else
             drawings.Distance.Visible = false
+        end
+
+        if esp_health then
+            local now = tick()
+            if now - drawings._lastHpUpdate > hRATE then
+                drawings._lastHpUpdate = now
+
+                local newHp = math.floor(h:GetAttribute("Health") * 10 + .5) / 10
+
+                if not drawings._lastHp or math.abs(drawings._lastHp - newHp) >= .1 then
+                    drawings._lastHp = newHp
+                    drawings.Health.Text = hSuffix..newHp
+                end
+            end
+
+            drawings.Health.Position = screenPos - Vector2.new(0, 30)
+            drawings.Health.Color = teamColor
+            drawings.Health.Visible = true
+        else
+            drawings.Health.Visible = false
         end
     end
 end)
