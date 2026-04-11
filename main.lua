@@ -185,7 +185,8 @@ local function makefast(char)
 	end
 end
 
-localplr.CharacterAdded:Connect(makefast)
+local lpca = localplr.CharacterAdded:Connect(makefast)
+table.insert(endconnections, lpca)
 
 local function find(child)
 	if child:IsA("Tool") then
@@ -335,16 +336,16 @@ local function removeESP(player)
 
     if drawings.Skeleton and drawings.Skeleton.Lines then
         for _, line in ipairs(drawings.Skeleton.Lines) do
-            line:Remove()
+            line:Destroy()
         end
     end
 
-    if drawings.Line then drawings.Line:Remove() end
-    if drawings.Name then drawings.Name:Remove() end
-    if drawings.Box then drawings.Box:Remove() end
-    if drawings.Highlight then drawings.Highlight:Remove() end
-    if drawings.Distance then drawings.Distance:Remove() end
-    if drawings.Health then drawings.Health:Remove() end
+    if drawings.Line then drawings.Line:Destroy() end
+    if drawings.Name then drawings.Name:Destroy() end
+    if drawings.Box then drawings.Box:Destroy() end
+    if drawings.Highlight then drawings.Highlight:Destroy() end
+    if drawings.Distance then drawings.Distance:Destroy() end
+    if drawings.Health then drawings.Health:Destroy() end
 
     espDrawings[player] = nil
 end
@@ -398,6 +399,11 @@ local function trackPlayer(player)
 
         local bones = rigType == "R6" and R6Bones or R15Bones
 
+        if drawings.Skeleton and drawings.Skeleton.Lines then
+            for _, line in ipairs(drawings.Skeleton.Lines) do
+                line:Destroy()
+            end
+        end
         drawings.Skeleton = {
             Lines = {},
             Bones = bones,
@@ -418,9 +424,10 @@ local function trackPlayer(player)
 		onCharacter(player.Character)
 	end
 
-	player.CharacterAdded:Connect(onCharacter)
+	local pca = player.CharacterAdded:Connect(onCharacter)
+    table.insert(endconnections, pca)
 
-	player.CharacterRemoving:Connect(function()
+	local pcr = player.CharacterRemoving:Connect(function()
         if trackedPlayers[player] then
             trackedPlayers[player].Character = nil
             trackedPlayers[player].Head = nil
@@ -433,6 +440,8 @@ local function trackPlayer(player)
             end
         end
     end)
+    table.insert(endconnections, pcr)
+
 end
 
 local function untrackPlayer(player)
@@ -541,22 +550,18 @@ for i, frame in scpTeams:GetChildren() do
 end
 
 
-workspace.ChildAdded:Connect(function()
-	for i, child in workspace:GetChildren() do
-		if iesp then
-            find(child)
-        end
-
-		if noshyguy and child:IsA("Model") then
-			for i, d in child:GetDescendants() do
-				if d.Name == "FacePoint" then
-					d:Destroy()
-					notif("SCP-096 can no longer be angered.", "SCP-096 Detected")
-				end
+local wca = workspace.ChildAdded:Connect(function(child)
+	find(child)
+	if noshyguy and child:IsA("Model") then
+		for i, d in child:GetDescendants() do
+			if d.Name == "FacePoint" then
+				d:Destroy()
+				notif("SCP-096 can no longer be angered.", "SCP-096 Detected")
 			end
 		end
 	end
 end)
+table.insert(endconnections, wca)
 
 local nukeframe
 local disabled
@@ -636,7 +641,6 @@ visualTab:CreateButton({
                 end)
             end)
         end
-        espDrawings = {}
     end
 })
 
@@ -651,10 +655,6 @@ local itemEsp = visualTab:CreateToggle({
             end
         else
             for i, child in espelem do
-                if typeof(child) == "userdata" then
-                    child:Remove()
-                    continue
-                end
                 child:Destroy()
             end
         end
@@ -1266,7 +1266,7 @@ local function destroyrayfield()
 
     reticletoggle:Set(false)
     if reticle then
-        reticle:Remove()
+        reticle:Destroy()
     end
     print("reticle fully off")
 
@@ -1281,7 +1281,7 @@ local function destroyrayfield()
     
     toggleaimbot:Set({})
     if circl then
-        circl:Remove()
+        circl:Destroy()
     end
     print("aimbot fully off")
 
@@ -1293,7 +1293,8 @@ local function destroyrayfield()
             if drawings.Skeleton and drawings.Skeleton.Lines then
                 for _, line in ipairs(drawings.Skeleton.Lines) do
                     pcall(function()
-                        line:Remove()
+                        line:Destroy()
+                        line = nil
                         n += 1
                     end)
                 end
@@ -1301,11 +1302,8 @@ local function destroyrayfield()
 
             for _, d in pairs(drawings) do
                 pcall(function()
-                    if typeof(d) == "Instance" then
-                        d:Destroy()
-                    else
-                        d:Remove()
-                    end
+                    d:Destroy()
+                    d = nil
                     n += 1
                 end)
             end
@@ -1598,13 +1596,13 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             if not drawings.Highlight.Adornee then
                 drawings.Highlight.Adornee = char
             end
+            
             drawings.Highlight.FillColor = teamColor
-            task.defer(function()
-                if dist > 350 or dist < 15 then
-                    drawings.Highlight.Enabled = false
-                end
-                drawings.Highlight.Enabled = true
-            end)
+
+            if dist > 350 or dist < 15 then
+                drawings.Highlight.Enabled = false
+            end
+            drawings.Highlight.Enabled = true
         else
             if drawings.Highlight.Adornee then
                 drawings.Highlight.Adornee = nil
