@@ -35,14 +35,17 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
-PlaceId, JobId = game.PlaceId, game.JobId
+local PlaceId, JobId = game.PlaceId, game.JobId
 
 local Camera = workspace.CurrentCamera
 local localplr = Players.LocalPlayer
+local localgui = localplr.PlayerGui
+
+local PVP = ReplicatedStorage:FindFirstChild("PVP")
 
 local cframe = CFrame.new(1.53290033, 1.97216606, -0.825374484, 0.982948065, -0.171378091, -0.0666531026, 0.0773534179, 0.714215279, -0.695638537, 0.166821882, 0.678620696, 0.715293169)
-local falldmg = ReplicatedStorage.PVP:FindFirstChild("FallDamage")
-local flashfx = localplr.PlayerGui:FindFirstChild("FlashFx") or nil
+local falldmg = PVP and PVP:FindFirstChild("FallDamage")
+local flashfx = localgui:FindFirstChild("FlashFx") or nil
 
 local iesp = false
 local noshyguy = false
@@ -60,6 +63,7 @@ local esp_hl = true
 local esp_skeleton = false
 local esp_distance = false
 local esp_health = false
+local getclosestheadloopactive = true
 
 local espDrawings = {}
 local espelem = {}
@@ -97,6 +101,7 @@ local R6Bones = {
 
 local runLoop
 local endconnections = {}
+local localCharConnections = {}
 
 ---------------------FUNCS AND CONNECTIONS
 
@@ -122,6 +127,21 @@ local function getRigType(char)
     return char:FindFirstChild("UpperTorso") and "R15"
             or char:FindFirstChild("Torso") and "R6"
             or nil
+end
+local function clearLocalCharConnections()
+    for _, c in ipairs(localCharConnections) do
+        c:Disconnect()
+    end
+    localCharConnections = {}
+end
+
+local function safeFind(root, path) --this is a cool object path finder
+    local current = root
+    for _, name in ipairs(path) do
+        if not current then return nil end
+        current = current:FindFirstChild(name)
+    end
+    return current
 end
 
 local function sameTeam(plr, isesp)
@@ -171,22 +191,26 @@ local function reset()
 end
 
 local function makefast(char)
-	local humanoid = getHuman(char)
-	if humanoid then
-		humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-			if fastoldman ~= true and localplr.Team.Name ~= "SCP" then return end
-			if humanoid.WalkSpeed == 3 or humanoid.WalkSpeed == 16.5 then return end
-			if humanoid.WalkSpeed <= 1.5 then
-				humanoid.WalkSpeed = 3
-			elseif humanoid.WalkSpeed <= 15 then
-				humanoid.WalkSpeed = 16.5
-			end
-		end)
-	end
-end
+    clearLocalCharConnections()
 
+    local humanoid = getHuman(char)
+    if not humanoid then return end
+
+    local hc = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        if not fastoldman and localplr.Team.Name ~= "SCP" then return end
+        if humanoid.WalkSpeed == 3 or humanoid.WalkSpeed == 16.5 then return end
+
+        if humanoid.WalkSpeed <= 1.5 then
+            humanoid.WalkSpeed = 3
+        elseif humanoid.WalkSpeed <= 15 then
+            humanoid.WalkSpeed = 16.5
+        end
+    end)
+
+    table.insert(localCharConnections, hc)
+end
 local lpca = localplr.CharacterAdded:Connect(makefast)
-table.insert(endconnections, lpca)
+table.insert(localCharConnections, lpca)
 
 local function find(child)
 	if child:IsA("Tool") then
@@ -235,22 +259,27 @@ local function find(child)
 		end
 
         ------micro
-        local charge
-        local ccolor
         if child.Name == "Micro HID" then
-            charge = child.MicroServer.Charge
+            local sscript = child:FindFirstChild("MicroServer")
+            local charge = sscript and sscript:FindFirstChild("Charge")
+            if not charge then return end
             b.Size += Vector3.new(.5,.5,.5)
 
             local function microCharge()
-                charge = child.MicroServer.Charge
                 local value = math.clamp(charge.Value, 0, 1)
-                ccolor = Color3.new(value, value, value)
-                b.Color3 = ccolor
+                b.Color3 = Color3.new(value, value, value)
                 b.Transparency = .5 + (1 - value) * .25
             end
             microCharge()
 
-            charge:GetPropertyChangedSignal("Value"):Connect(microCharge)
+            local cgpcsc = charge:GetPropertyChangedSignal("Value"):Connect(microCharge)
+            table.insert(endconnections, cgpcsc)
+
+            child.Destroying:Once(function()
+                if cgpcsc then
+                    cgpcsc:Disconnect()
+                end
+            end)
         end
 	end
 end
@@ -273,6 +302,10 @@ local function hideSkeleton(drawings)
 end
 
 local function createESP(player)
+    if espDrawings[player] then
+        removeESP(player)
+    end
+
     local drawings = {
         Line = Drawing.new("Line"),
         Name = Drawing.new("Text"),
@@ -364,6 +397,12 @@ reticle.Filled = false
 reticle.Color = Color3.new(1,1,1)
 
 local trackedPlayers = {}
+local function addConnection(player, conn)
+    local data = trackedPlayers[player]
+    if data then
+        table.insert(data.Connections, conn)
+    end
+end
 
 local function trackPlayer(player)
 	if player == localplr then return end
@@ -376,7 +415,9 @@ local function trackPlayer(player)
 		Head = nil,
         Root = nil,
         RigType = nil,
-        Humanoid = nil
+        Humanoid = nil,
+
+        Connections = {}
 	}
 
     local function onCharacter(char)
@@ -391,10 +432,8 @@ local function trackPlayer(player)
             drawings.Highlight.Adornee = char
         end
 
-        local rigType = char:FindFirstChild("UpperTorso") and "R15"
-            or char:FindFirstChild("Torso") and "R6"
-            or nil
-
+        ----skeleton
+        local rigType = trackedPlayers[player].RigType
         if not rigType then return end
 
         local bones = rigType == "R6" and R6Bones or R15Bones
@@ -424,30 +463,39 @@ local function trackPlayer(player)
 		onCharacter(player.Character)
 	end
 
-	local pca = player.CharacterAdded:Connect(onCharacter)
-    table.insert(endconnections, pca)
+	addConnection(player, player.CharacterAdded:Connect(onCharacter))
 
-	local pcr = player.CharacterRemoving:Connect(function()
-        if trackedPlayers[player] then
-            trackedPlayers[player].Character = nil
-            trackedPlayers[player].Head = nil
-            trackedPlayers[player].Root = nil
-            trackedPlayers[player].RigType = nil
-            trackedPlayers[player].Humanoid = nil
+	addConnection(player, player.CharacterRemoving:Connect(function()
+        local data = trackedPlayers[player]
+        if data then
+            data.Character = nil
+            data.Head = nil
+            data.Root = nil
+            data.RigType = nil
+            data.Humanoid = nil
+
             local drawings = espDrawings[player]
-            if drawings and drawings.Skeleton then
+            if drawings then
                 hideSkeleton(drawings)
             end
         end
-    end)
-    table.insert(endconnections, pcr)
+    end))
 
 end
 
 local function untrackPlayer(player)
-	trackedPlayers[player] = nil
+    local data = trackedPlayers[player]
+    if not data then return end
+
+    for i, c in ipairs(data.Connections) do
+        c:Disconnect()
+    end
+        
+    data.Connections = nil
     removeESP(player)
+    trackedPlayers[player] = nil
 end
+
 
 for _, p in ipairs(Players:GetPlayers()) do
 	trackPlayer(p)
@@ -519,46 +567,60 @@ local docgui
 local doggui
 local dogagaingui
 
-local buttons = localplr.PlayerGui.MenuGui.MainFrame.Teams.TeamButtons
-local playerTeams = buttons.Other
-local scpTeams = buttons.SCPs
+local buttons = safeFind(localgui, {
+    "MenuGui",
+    "MainFrame",
+    "Teams",
+    "TeamButtons"
+})
+local playerTeams = buttons and buttons:FindFirstChild("Other")
+local scpTeams = buttons and buttons:FindFirstChild("SCPs")
 
-local queuegui = buttons.Parent.QueuedText
-local credits = buttons.Parent.Parent.Shop.Credits
+local queuegui = buttons and buttons.Parent:FindFirstChild("QueuedText")
+local credits = buttons and safeFind(buttons.Parent.Parent, {
+    "Shop",
+    "Credits"
+})
 
 for i, frame in playerTeams:GetChildren() do
     if not frame:IsA("Frame") then continue end
-    if frame.Button.Image == "rbxassetid://14263777415" then
+
+    local fbutton = frame:FindFirstChild("Button")
+    if fbutton.Image == "rbxassetid://14263777415" then
         chaosgui = frame
-    elseif frame.Button.Image == "rbxassetid://6774779934" then
+    elseif fbutton.Image == "rbxassetid://6774779934" then
         mtfgui = frame
     end
 end
 for i, frame in scpTeams:GetChildren() do
     if not frame:IsA("Frame") then continue end
-    if frame.Button.Image == "rbxassetid://14263837581" then
+
+    local fbutton = frame:FindFirstChild("Button")
+    if fbutton.Image == "rbxassetid://14263837581" then
         shyguygui = frame
-    elseif frame.Button.Image == "rbxassetid://9606026315" then
+    elseif fbutton.Image == "rbxassetid://9606026315" then
         oldmangui = frame
-    elseif frame.Button.Image == "rbxassetid://130261444621233" then
+    elseif fbutton.Image == "rbxassetid://130261444621233" then
         docgui = frame
-    elseif frame.Button.Image == "rbxassetid://17660598360" then
+    elseif fbutton.Image == "rbxassetid://17660598360" then
         doggui = frame
-    elseif frame.Button.Image == "rbxassetid://10563151614" then
+    elseif fbutton.Image == "rbxassetid://10563151614" then
         dogagaingui = frame
     end
 end
 
 
 local wca = workspace.ChildAdded:Connect(function(child)
-	find(child)
+    if not iesp or not noshyguy then return end
+	if iesp then
+        find(child)
+    end
 	if noshyguy and child:IsA("Model") then
-		for i, d in child:GetDescendants() do
-			if d.Name == "FacePoint" then
-				d:Destroy()
-				notif("SCP-096 can no longer be angered.", "SCP-096 Detected")
-			end
-		end
+        local facepoint = child:FindFirstChild("FacePoint", true)
+        if facepoint then
+            facepoint:Destroy()
+            notif("SCP-096 can no longer be angered.", "SCP-096 Detected")
+        end
 	end
 end)
 table.insert(endconnections, wca)
@@ -577,21 +639,30 @@ local inevitable
 local nukeconnections = {}
 
 local function getNukeVars()
-    if workspace:FindFirstChild("Heavy Containment Zone") then
+    local hcz = workspace:FindFirstChild("Heavy Containment Zone")
+    if hcz then
         for i, connection in nukeconnections do
             connection:Disconnect()
+            nukeconnections[i] = nil
         end
 
-        nukeframe = workspace["Heavy Containment Zone"].WarheadNonModular.Room.Collidables.SCPSLPanel.Screen.WarheadScreen.MainFrame
-        disabled = nukeframe.Disabled
-        timeframes = nukeframe.Time
-        minone = timeframes["Min1"]
-        mintwo = timeframes["Min2"]
-        secone = timeframes["Sec1"]
-        sectwo = timeframes["Sec2"]
-        milone = timeframes["Mil1"]
-        miltwo = timeframes["Mil2"]
-        inevitable = nukeframe.Inevitable
+        local nukeframe = safeFind(hcz, {
+            "WarheadNonModular",
+            "Room",
+            "Collidables",
+            "SCPSLPanel",
+            "Screen",
+            "WarheadScreen",
+            "MainFrame"
+        })
+        timeframes = nukeframe:FindFirstChild("Time")
+        minone = timeframes:FindFirstChild("Min1")
+        mintwo = timeframes:FindFirstChild("Min2")
+        secone = timeframes:FindFirstChild("Sec1")
+        sectwo = timeframes:FindFirstChild("Sec2")
+        milone = timeframes:FindFirstChild("Mil1")
+        miltwo = timeframes:FindFirstChild("Mil2")
+        inevitable = nukeframe:FindFirstChild("Inevitable")
         return true
     else
         return false
@@ -654,8 +725,9 @@ local itemEsp = visualTab:CreateToggle({
 	            find(child)
             end
         else
-            for i, child in espelem do
+            for i, child in pairs(espelem) do
                 child:Destroy()
+                espelem[i] = nil
             end
         end
     end
@@ -674,11 +746,11 @@ local noFlash = visualTab:CreateToggle({
     CurrentValue = false,
     Callback = function(Value)
         if Value == true then
-            if localplr.PlayerGui:FindFirstChild("FlashFx") then
+            if localgui:FindFirstChild("FlashFx") then
                 flashfx.Parent = ReplicatedStorage
             end
         else
-            flashfx.Parent = localplr.PlayerGui
+            flashfx.Parent = localgui
         end
     end
 })
@@ -732,8 +804,9 @@ local findRooms = visualTab:CreateToggle({
             notif("Found.")
 
         else
-            for i, child in exitelem do
+            for i, child in pairs(exitelem) do
                 child:Destroy()
+                exitelem[i] = nil
             end
         end
     end
@@ -786,22 +859,27 @@ local fullbright = visualTab:CreateButton({
 
 local function updatelabel(gui, label, textname:string, gamepass:boolean)
 	if not gui or not label or not textname then return end
-	local open = gui.Timer.Text == "0:00" or gui.Timer.TextTransparency == 1
-	if gui.Required.TextTransparency == 0 then
+
+    local timer = gui:FindFirstChild("Timer")
+    local required = gui:FindFirstChild("Required")
+    if not timer or not required then return end
+
+	local open = timer.Text == "0:00" or timer.TextTransparency == 1
+	if required.TextTransparency == 0 then
 		if gamepass then
 			label:Set(textname..": ??? (Gamepass Required)")
 		else
 			if open then
 				label:Set(textname..": Open (Badge Required)")
 			else
-				label:Set(textname..": "..tostring(gui.Timer.Text).." (Badge Required)")
+				label:Set(textname..": "..tostring(timer.Text).." (Badge Required)")
 			end
 		end
 	else
 		if open then
 			label:Set(textname..": Open")
 		else
-			label:Set(textname..": "..tostring(gui.Timer.Text))
+			label:Set(textname..": "..tostring(timer.Text))
 		end
 	end
 end
@@ -913,8 +991,9 @@ local disablefdmg = mainTab:CreateButton({
     Callback = function()
         if falldmg then
             falldmg:Destroy()
+            notif("Fall Damage disabled.")
         else
-            notif("Fall Damaged already disabled.")
+            notif("Fall Damage already disabled.")
         end
     end
 })
@@ -931,16 +1010,31 @@ local doireset = mainTab:CreateToggle({
 local containhim = mainTab:CreateButton({
     Name = "Contain SCP-106 Old Man",
     Callback = function()
-        local cell = workspace:FindFirstChild("Heavy Containment Zone"):FindFirstChild("106") and workspace["Heavy Containment Zone"]["106"]:FindFirstChild("Room"):FindFirstChild("Collidables"):FindFirstChild("106_Cell")
+        local hcz = workspace:FindFirstChild("Heavy Containment Zone")
+        local cell = hcz and safeFind(hcz, {
+            "106",
+            "Room",
+            "Collidables",
+            "106_Cell"
+        })
         local buttoncf
         local touchcf
         local inter
+
         if cell then
-            buttoncf = cell.RecontainmentBack.CFrame
-            touchcf = cell.Touch.CFrame
-            inter = cell.RecontainmentButton.Interaction
+            local recontainmentback = cell:FindFirstChild("RecontainmentBack")
+            local touch = cell:FindFirstChild("Touch")
+
+            if not recontainmentback or not touch then
+                notif("Cannot find 106 cell child RecontainmentBack or Touch. (Map is loading?)", "Containment Failed")
+                return
+            end
+
+            buttoncf = recontainmentback.CFrame
+            touchcf = touch.CFrame
+            inter = recontainmentback.Interaction
         else
-            notif("Cannot Find 106 Room. Map is Loading?")
+            notif("Cannot find 106 room. (Map is loading?)", "Containment Failed")
             return
         end
 
@@ -948,7 +1042,7 @@ local containhim = mainTab:CreateButton({
         local root = getRoot(char)
         local cur = root.CFrame
 
-        if inter and root then
+        if root then
             TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = touchcf}):Play()
             task.wait(3)
             char = getChar(localplr)
@@ -962,6 +1056,12 @@ local containhim = mainTab:CreateButton({
             else
                 TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = cur}):Play()
             end
+        else
+            if isDead(localplr) then
+                notif("You're dead.", "Containment Failed")
+            else
+                notif("Your root is gone?", "Containment Failed")
+            end
         end
     end
 })
@@ -972,10 +1072,23 @@ local nuke = mainTab:CreateButton({
         local root = getRoot(char)
         local cur = root.CFrame
         local pos = CFrame.new(21, 955, -142)
+        local leverinteract = safeFind(workspace, {
+            "Heavy Containment Zone",
+            "WarheadNonModular",
+            "Room",
+            "Collidables",
+            "SCPSLPanel",
+            "LeverInteractables",
+            "Interaction"
+        })
+        if not leverinteract then
+            notif("Could not find nuke lever. (Map is loading?)")
+            return
+        end
 
         TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = pos}):Play()
         task.wait(1.65)
-        workspace["Heavy Containment Zone"].WarheadNonModular.Room.Collidables.SCPSLPanel.LeverInteractables.Interaction:FireServer()
+        leverinteract:FireServer()
         task.wait(.25)
         if resetafter then
             reset()
@@ -992,11 +1105,27 @@ local cancel = mainTab:CreateButton({
         local root = getRoot(char)
         local pos = CFrame.new(21, 955, -142)
         local cur = root.CFrame
+        local buttoninteract = safeFind(workspace, {
+            "Heavy Containment Zone",
+            "WarheadNonModular",
+            "Room",
+            "Collidables",
+            "SCPSLPanel",
+            "ButtonInteractables",
+            "Interaction"
+        })
+        local leverinteract = buttoninteract and safeFind(buttoninteract.Parent.Parent, {
+            "LeverInteractables",
+            "Interaction"
+        })
+        if not buttoninteract or not leverinteract then
+            notif("Could not find nuke lever or button. (Map is loading?)")
+        end
 
         TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = pos}):Play()
         task.wait(1.65)
-        workspace["Heavy Containment Zone"].WarheadNonModular.Room.Collidables.SCPSLPanel.ButtonInteractable.Interaction:FireServer()
-        workspace["Heavy Containment Zone"].WarheadNonModular.Room.Collidables.SCPSLPanel.LeverInteractables.Interaction:FireServer()
+        buttoninteract:FireServer()
+        leverinteract:FireServer()
         task.wait(.25)
         if resetafter then
             reset()
@@ -1013,8 +1142,24 @@ local activate = mainTab:CreateButton({
         local cur = root.CFrame
         local pos = CFrame.new(-82, -1527, 99)
 
-        local cover = workspace.Surface.Surface.GateA["Warhead Control Room"].Collidables.WarheadStand.CoverInteractables.Interaction
-        local button = workspace.Surface.Surface.GateA["Warhead Control Room"].Collidables.WarheadStand.ButtonInteractable.Interaction
+        local cover = safeFind(workspace, {
+            "Surface",
+            "Surface",
+            "GateA",
+            "Warhead Control Room",
+            "Collidables",
+            "WarheadStand",
+            "CoverInteractables",
+            "Interaction"
+        })
+        local button = cover and safeFind(cover.Parent.Parent, {
+            "ButtonInteractables",
+            "Interaction"
+        })
+        if not cover or not button then
+            notif("Could not find surface nuke button or its cover. (Map is loading?)")
+            return
+        end
 
         TweenService:Create(root, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = pos}):Play()
         task.wait(1.65)
@@ -1096,12 +1241,16 @@ local healk = bindsTab:CreateKeybind({
         local char = getChar(localplr)
 		local backpack = localplr.Backpack
 		local medkit = backpack:FindFirstChild("Medkit")
-		if medkit then
+        local medkitinteraction = medkit and safeFind(medkit, {
+            "MedkitServer",
+            "Pressing"
+        })
+		if medkit and medkitinteraction then
 			medkit.Parent = char
-			medkit.MedkitServer.Pressing:FireServer(true)
+			medkitinteraction:FireServer(true)
 			notif("Healing! Unequip any non-medkit items!")
 		else
-			notif("No medkit in inventory. (Or already holding one!)")
+			notif("No medkit in inventory or medkit is broken. (Or you're already holding one!)")
 		end
     end
 })
@@ -1116,12 +1265,15 @@ local ballk = bindsTab:CreateKeybind({
 		local backpack = localplr.Backpack
 
 		local ball = backpack:FindFirstChild("SCP-018")
-		if ball then
+        local interaction = ball and safeFind(ball, {
+            "SCP018Interaction"
+        })
+		if ball and interaction then
 			ball.Parent = char
-			ball.SCP018Interaction:FireServer("Throw", hrp.CFrame * cframe, Camera.CFrame.LookVector)
+			interaction:FireServer("Throw", hrp.CFrame * cframe, Camera.CFrame.LookVector)
 			notif("Throwing ball!")
 		else
-			notif("No ball in inventory. (Or already holding one!)")
+			notif("No ball in inventory or ball is broken. (Or you're already holding one!)")
 		end
     end
 })
@@ -1247,16 +1399,26 @@ local function destroyrayfield()
         print("reticle unbinded")
     end
 
+    getclosestheadloopactive = false
+    print("getclosestheadloopactive while loop set to false")
+
+    clearLocalCharConnections()
+    print("cleared local char connections")
+
     local nc = 0
-    for _, connection in pairs(endconnections) do
-        connection:Disconnect()
-        nc += 1
+    for i, connection in ipairs(endconnections) do
+        if connection then
+            connection:Disconnect()
+            endconnections[i] = nil
+            nc += 1
+        end
     end
     print(nc, "connections disconnected")
 
     local nnc = 0
-    for _, connection in pairs(nukeconnections) do
+    for i, connection in ipairs(nukeconnections) do
         connection:Disconnect()
+        nukeconnections[i] = nil
         nnc += 1
     end
     print(nnc, "nuke connections disconnected")
@@ -1288,25 +1450,30 @@ local function destroyrayfield()
     espd:Set({})
 
     local n = 0
-    for _, drawings in pairs(espDrawings) do
+    for i, drawings in pairs(espDrawings) do
         if drawings then
             if drawings.Skeleton and drawings.Skeleton.Lines then
-                for _, line in ipairs(drawings.Skeleton.Lines) do
+                local lines = drawings.Skeleton.Lines
+                for i, line in ipairs(lines) do
                     pcall(function()
                         line:Destroy()
                         line = nil
+                        lines[i] = nil
                         n += 1
                     end)
                 end
             end
 
-            for _, d in pairs(drawings) do
+            for i, d in pairs(drawings) do
                 pcall(function()
                     d:Destroy()
                     d = nil
+                    drawings[i] = nil
                     n += 1
                 end)
             end
+
+            espDrawings[i] = nil
         end
     end
     print("destroyed", n, "drawings")
@@ -1317,6 +1484,11 @@ local function destroyrayfield()
 
     visd:Set(false)
     print("debug view off")
+
+    R15Bones = nil
+    R6Bones = nil
+    trackedPlayers = {}
+    print("cleaned tables")
 
     print("rayfield destroying...")
     task.wait(1)
@@ -1390,47 +1562,46 @@ table.insert(endconnections, dagc)
 local currentTarget = nil
 local dz = .004
 
+task.spawn(function()
+    while getclosestheadloopactive do
+        if silentaimbot then
+            currentTarget = GetClosestHead()
+        else
+            currentTarget = nil
+        end
+
+        task.wait(0.05)
+    end
+end)
+
 RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, function(dt)
-	circl.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    circl.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
-    local cam = Camera or workspace.CurrentCamera
+    if not silentaimbot or not currentTarget then
+        return
+    end
 
-	if not silentaimbot then
-		currentTarget = nil
-		return
-	end
-
-	local newTarget = GetClosestHead()
-
-	if newTarget then
-		currentTarget = newTarget
-	else
-		currentTarget = nil
-	end
-
-	if not currentTarget then return end
-
-	local camCF = Camera.CFrame
-	local camPos = camCF.Position
+    local camCF = Camera.CFrame
+    local camPos = camCF.Position
 
     local velocity = currentTarget.AssemblyLinearVelocity
-    local predictedPos = currentTarget.Position + velocity * .05
+    local predictedPos = currentTarget.Position + velocity * 0.05
 
-	local targetDir = (predictedPos - camPos).Unit
-	local currentDir = camCF.LookVector
+    local targetDir = (predictedPos - camPos).Unit
+    local currentDir = camCF.LookVector
+
     local diff = (targetDir - currentDir).Magnitude
-    if diff < dz then
-	    return
-    end
-    if diff < .125 then
+    if diff < dz then return end
+
+    if diff < 0.125 then
         Camera.CFrame = CFrame.new(camPos, currentTarget.Position)
-	    return
+        return
     end
 
-	local alpha = math.clamp(dt * 10, 0, 1)
-	local newDir = currentDir:Lerp(targetDir, alpha)
-    
-	Camera.CFrame = CFrame.new(camPos, camPos + newDir)
+    local alpha = math.clamp(dt * 10, 0, 1)
+    local newDir = currentDir:Lerp(targetDir, alpha)
+
+    Camera.CFrame = CFrame.new(camPos, camPos + newDir)
 end)
 
 local lastUpdate = 0
@@ -1476,7 +1647,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         local drawings = espDrawings[player]
         local dist: number = root and math.floor((camPos - root.Position).Magnitude * 10 + .5) / 10
 
-        if not drawings or not char or isDead(player) or (root and dist > 750) then
+        if not drawings or not char or isDead(player) or (root and dist and dist > 750) then
             if drawings then
                 drawings.Line.Visible = false
                 drawings.Name.Visible = false
@@ -1601,8 +1772,9 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
 
             if dist > 350 or dist < 15 then
                 drawings.Highlight.Enabled = false
+            else
+                drawings.Highlight.Enabled = true
             end
-            drawings.Highlight.Enabled = true
         else
             if drawings.Highlight.Adornee then
                 drawings.Highlight.Adornee = nil
@@ -1667,7 +1839,8 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             if now - drawings._lastHpUpdate > hRATE then
                 drawings._lastHpUpdate = now
 
-                local newHp = math.floor(h:GetAttribute("Health") * 10 + .5) / 10
+                local curHp = h:GetAttribute("Health") or 0
+                local newHp = curHp and math.floor(curHp * 10 + .5) / 10
 
                 if not drawings._lastHp or math.abs(drawings._lastHp - newHp) >= .1 then
                     drawings._lastHp = newHp
