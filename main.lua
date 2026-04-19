@@ -655,6 +655,7 @@ local function getNukeVars()
             "WarheadScreen",
             "MainFrame"
         })
+		disabled = nukeframe:FindFirstChild("Disabled")
         timeframes = nukeframe:FindFirstChild("Time")
         minone = timeframes:FindFirstChild("Min1")
         mintwo = timeframes:FindFirstChild("Min2")
