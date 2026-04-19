@@ -1112,7 +1112,7 @@ local cancel = mainTab:CreateButton({
             "Room",
             "Collidables",
             "SCPSLPanel",
-            "ButtonInteractables",
+            "ButtonInteractable",
             "Interaction"
         })
         local leverinteract = buttoninteract and safeFind(buttoninteract.Parent.Parent, {
@@ -1154,7 +1154,7 @@ local activate = mainTab:CreateButton({
             "Interaction"
         })
         local button = cover and safeFind(cover.Parent.Parent, {
-            "ButtonInteractables",
+            "ButtonInteractable",
             "Interaction"
         })
         if not cover or not button then
