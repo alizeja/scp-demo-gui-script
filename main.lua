@@ -121,7 +121,7 @@ local function getHuman(char)
 end
 local function getRoot(char, humanoid)
     if not humanoid then humanoid = getHuman(char) end
-    return char:FindFirstChild("HumanoidRootPart") or (humanoid and humanoid.RootPart) or char:WaitForChild("HumanoidRootPart", 2)
+    return char:FindFirstChild("HumanoidRootPart") or (humanoid and humanoid.RootPart) or char:WaitForChild("HumanoidRootPart", 2) or char:FindFirstChild("Head")
 end
 local function getRigType(char)
     return char:FindFirstChild("UpperTorso") and "R15"
@@ -596,7 +596,7 @@ for i, frame in scpTeams:GetChildren() do
     if not frame:IsA("Frame") then continue end
 
     local fbutton = frame:FindFirstChild("Button")
-    if fbutton.Image == "rbxassetid://14263837581" then
+    if fbutton.Image == "rbxassetid://6652560715" then
         shyguygui = frame
     elseif fbutton.Image == "rbxassetid://9606026315" then
         oldmangui = frame
