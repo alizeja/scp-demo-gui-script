@@ -953,12 +953,12 @@ local dogagainlabel = teamTab:CreateLabel(
 )
 updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
 local peanutlabel = teamTab:CreateLabel(
-    "SCP-173 : "..tostring(dogagaingui.Timer.Text),
-    10563151614,
+    "SCP-173 The Sculpture: "..tostring(peanutgui.Timer.Text),
+    107633438687013,
     Color3.new(),
     false
 )
-updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
+updatelabel(peanutgui, peanutlabel, "SCP-173 The Scuplture", true)
 
 
 local toggleaimbot = mainTab:CreateDropdown({
@@ -1035,17 +1035,17 @@ local containhim = mainTab:CreateButton({
         local inter
 
         if cell then
-            local recontainmentback = cell:FindFirstChild("RecontainmentBack")
+            local recontainmentbutton = cell:FindFirstChild("RecontainmentButton")
             local touch = cell:FindFirstChild("Touch")
 
-            if not recontainmentback or not touch then
-                notif("Cannot find 106 cell child RecontainmentBack or Touch. (Map is loading?)", "Containment Failed")
+            if not recontainmentbutton or not touch then
+                notif("Cannot find 106 cell child Recontainment Button or Touch. (Map is loading?)", "Containment Failed")
                 return
             end
 
-            buttoncf = recontainmentback.CFrame
+            buttoncf = recontainmentbutton.Button.CFrame
             touchcf = touch.CFrame
-            inter = recontainmentback.Interaction
+            inter = recontainmentbutton.Interaction
         else
             notif("Cannot find 106 room. (Map is loading?)", "Containment Failed")
             return
@@ -1570,6 +1570,10 @@ local dagc = dogagaingui.Timer:GetPropertyChangedSignal("Text"):Connect(function
 	updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
 end)
 table.insert(endconnections, dagc)
+local pgc = peanutgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+	updatelabel(peanutgui, peanutlabel, "SCP-173 The Sculpture", true)
+end)
+table.insert(endconnections, pgc)
 
 
 local currentTarget = nil
