@@ -914,7 +914,7 @@ updatelabel(mtfgui, mtflabel, "Mobile Task Force", false)
 local scpssection = teamTab:CreateSection("SCPs")
 local shyguylabel = teamTab:CreateLabel(
     "SCP-096 Shy Guy: "..tostring(shyguygui.Timer.Text),
-    14263837581,
+    6652560715,
     Color3.new(),
     false
 )
