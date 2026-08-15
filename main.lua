@@ -171,7 +171,7 @@ end
 local function isDead(plr)
     local plrchar = getChar(plr)
     local humanoid = plrchar and getHuman(plrchar)
-    local fakeHp = humanoid:GetAttribute("Health")
+    local fakeHp = humanoid and humanoid:GetAttribute("Health")
 
 	if plrchar and humanoid then
 		return (fakeHp and fakeHp <= 0) or (humanoid and humanoid:GetState() == Enum.HumanoidStateType.Dead) or plrchar == nil
@@ -421,6 +421,8 @@ local function trackPlayer(player)
 	}
 
     local function onCharacter(char)
+        if not char then return end
+
         trackedPlayers[player].Character = char
         trackedPlayers[player].Head = char:WaitForChild("Head", 2)
         trackedPlayers[player].Root = getRoot(char)
@@ -566,6 +568,7 @@ local oldmangui
 local docgui
 local doggui
 local dogagaingui
+local peanutgui
 
 local buttons = safeFind(localgui, {
     "MenuGui",
@@ -606,6 +609,8 @@ for i, frame in scpTeams:GetChildren() do
         doggui = frame
     elseif fbutton.Image == "rbxassetid://10563151614" then
         dogagaingui = frame
+    elseif fbutton.Image == "rbxassetid://107633438687013" then
+        peanutgui = frame
     end
 end
 
@@ -942,6 +947,13 @@ local doglabel = teamTab:CreateLabel(
 updatelabel(doggui, doglabel, "SCP-939-53 With Many Voices", true)
 local dogagainlabel = teamTab:CreateLabel(
     "SCP-939-89 With Many Voices: "..tostring(dogagaingui.Timer.Text),
+    10563151614,
+    Color3.new(),
+    false
+)
+updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
+local peanutlabel = teamTab:CreateLabel(
+    "SCP-173 : "..tostring(dogagaingui.Timer.Text),
     10563151614,
     Color3.new(),
     false
