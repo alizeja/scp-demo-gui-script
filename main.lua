@@ -42,6 +42,7 @@ local localplr = Players.LocalPlayer
 local localgui = localplr.PlayerGui
 
 local PVP = ReplicatedStorage:FindFirstChild("PVP")
+local gameStatus = ReplicatedStorage:FindFirstChild("GameStatus")
 
 local cframe = CFrame.new(1.53290033, 1.97216606, -0.825374484, 0.982948065, -0.171378091, -0.0666531026, 0.0773534179, 0.714215279, -0.695638537, 0.166821882, 0.678620696, 0.715293169)
 local falldmg = PVP and PVP:FindFirstChild("FallDamage")
@@ -106,6 +107,8 @@ local R6Bones = {
 local runLoop
 local endconnections = {}
 local localCharConnections = {}
+
+gameStatus:SetAttribute("SpawnWaveTime", 0)
 
 ---------------------FUNCS AND CONNECTIONS
 
@@ -217,6 +220,8 @@ local lpca = localplr.CharacterAdded:Connect(makefast)
 table.insert(localCharConnections, lpca)
 
 local function find(child)
+    if not child then return end --how no child
+    
 	if child:IsA("Tool") then
 		if not child:FindFirstChild("Handle") then return end
 		local handle = child.Handle
@@ -992,6 +997,12 @@ else
 end
 
 local playerteamsection = teamTab:CreateSection("Player Teams")
+local swlabel = teamTab:CreateLabel(
+    "End-game Spawn Wave Timer: "..gameStatus:GetAttribute("SpawnWaveTime"),
+    nil,
+    Color3.new(),
+    false
+)
 local chaoslabel = teamTab:CreateLabel(
     "Chaos Insurgency: "..tostring(chaosgui.Timer.Text),
     14263777415,
@@ -1669,6 +1680,9 @@ local pgc = peanutgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
 	updatelabel(peanutgui, peanutlabel, "SCP-173 The Sculpture", true)
 end)
 table.insert(endconnections, pgc)
+table.insert(endconnections, gameStatus:GetAttributeChangedSignal("SpawnWaveTime"):Connect(function()
+    swlabel:Set("End-game Spawn Wave Timer: "..gameStatus:GetAttribute("SpawnWaveTime"))
+end))
 
 
 local currentTarget = nil
@@ -1721,7 +1735,7 @@ local RATE = 1/20
 local dSuffix = "Distance: "
 local dRATE = 1/10
 local hSuffix = "Health: "
-local hRATE = 1/1
+local hRATE = 1/45
 
 RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, function()
     local now = tick()
@@ -1952,12 +1966,20 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             if now - drawings._lastHpUpdate > hRATE then
                 drawings._lastHpUpdate = now
 
+                local withShieldText = nil
                 local curHp = h and h:GetAttribute("Health") or 0
                 local newHp = curHp and math.floor(curHp * 10 + .5) / 10
 
+                if h and h:GetAttribute("Shield") then
+                    withShieldText = string.format(
+                        hSuffix..newHp.." + %.1f",
+                        h:GetAttribute("Shield")
+                    )
+                end
+
                 if not drawings._lastHp or math.abs(drawings._lastHp - newHp) >= .1 then
                     drawings._lastHp = newHp
-                    drawings.Health.Text = hSuffix..newHp
+                    drawings.Health.Text = withShieldText ~= nil and withShieldText or hSuffix..newHp
                 end
             end
 
