@@ -49,6 +49,10 @@ local flashfx = localgui:FindFirstChild("FlashFx") or nil
 
 local iesp = false
 local noshyguy = false
+local fullbrightEnabled = false
+local roomESPEnabled = false
+local shyCovers = {}
+local originalLighting = nil
 local fastoldman = false
 local silentaimbot = false
 local filterteam = true
@@ -169,13 +173,13 @@ local function sameTeam(plr, isesp)
 end
 
 local function isDead(plr)
-    local plrchar = getChar(plr)
-    local humanoid = plrchar and getHuman(plrchar)
-    local fakeHp = humanoid and humanoid:GetAttribute("Health")
-
-	if plrchar and humanoid then
-		return (fakeHp and fakeHp <= 0) or (humanoid and humanoid:GetState() == Enum.HumanoidStateType.Dead) or plrchar == nil
-	end
+    local char = plr.Character
+    if not char then return true end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    local fakeHp = humanoid:GetAttribute("Health")
+    return (fakeHp ~= nil and fakeHp <= 0)
+        or humanoid:GetState() == Enum.HumanoidStateType.Dead
 end
 
 local function reset()
@@ -216,19 +220,20 @@ local function find(child)
 	if child:IsA("Tool") then
 		if not child:FindFirstChild("Handle") then return end
 		local handle = child.Handle
-        local ba = handle:FindFirstChildOfClass("BoxHandleAdornment", true)
+        local ba = handle:FindFirstChild("LocalItemESPBox")
 		if ba then
 			ba:Destroy()
 		end
 		local ttype = child:GetAttribute("ToolType")
 
 		local b = Instance.new("BoxHandleAdornment")
+        b.Name = "LocalItemESPBox"
 		b.Size = handle.Size
 		b.Parent = handle
 		b.Adornee = handle
 		b.AlwaysOnTop = true
 		b.ZIndex = 10
-		b.Transparency = .5
+		b.Transparency = .66
         table.insert(espelem, b)
 
 		
@@ -405,99 +410,137 @@ local function addConnection(player, conn)
 end
 
 local function trackPlayer(player)
-	if player == localplr then return end
+    if player == localplr or trackedPlayers[player] then return end
 
     createESP(player)
+    local data = {
+        Player = player, Character = nil, Head = nil, Root = nil,
+        RigType = nil, Humanoid = nil, Connections = {},
+        CharacterConnections = {}, Generation = 0
+    }
+    trackedPlayers[player] = data
 
-	trackedPlayers[player] = {
-		Player = player,
-		Character = nil,
-		Head = nil,
-        Root = nil,
-        RigType = nil,
-        Humanoid = nil,
+    local function clearCharacterConnections()
+        for _, conn in ipairs(data.CharacterConnections) do
+            conn:Disconnect()
+        end
+        table.clear(data.CharacterConnections)
+    end
 
-        Connections = {}
-	}
-
-    local function onCharacter(char)
-        if not char then return end
-
-        trackedPlayers[player].Character = char
-        trackedPlayers[player].Head = char:WaitForChild("Head", 2)
-        trackedPlayers[player].Root = getRoot(char)
-        trackedPlayers[player].RigType = getRigType(char)
-        trackedPlayers[player].Humanoid = getHuman(char)
-
+    local function refreshSkeleton(char)
+        local rigType = getRigType(char)
+        if not rigType or data.RigType == rigType then return end
+        data.RigType = rigType
         local drawings = espDrawings[player]
-        if drawings and drawings.Highlight then
-            drawings.Highlight.Adornee = char
+        if not drawings then return end
+        for _, line in ipairs(drawings.Skeleton.Lines) do
+            line:Destroy()
         end
-
-        ----skeleton
-        local rigType = trackedPlayers[player].RigType
-        if not rigType then return end
-
         local bones = rigType == "R6" and R6Bones or R15Bones
-
-        if drawings.Skeleton and drawings.Skeleton.Lines then
-            for _, line in ipairs(drawings.Skeleton.Lines) do
-                line:Destroy()
-            end
-        end
-        drawings.Skeleton = {
-            Lines = {},
-            Bones = bones,
-            RigType = rigType
-        }
-
+        drawings.Skeleton = {Lines = {}, Bones = bones, RigType = rigType}
         for i = 1, #bones do
             local line = Drawing.new("Line")
             line.Visible = false
             line.Thickness = 1
-            line.Color = Color3.new(1,1,1)
-
+            line.Color = Color3.new(1, 1, 1)
             drawings.Skeleton.Lines[i] = line
         end
     end
 
-	if player.Character then
-		onCharacter(player.Character)
-	end
+    local function onCharacter(char)
+        if not char then return end
+        data.Generation += 1
+        local generation = data.Generation
+        clearCharacterConnections()
+        data.Character, data.Head, data.Root = char, nil, nil
+        data.Humanoid, data.RigType = nil, nil
 
-	addConnection(player, player.CharacterAdded:Connect(onCharacter))
+        local drawings = espDrawings[player]
+        if drawings then
+            drawings.Highlight.Adornee = nil
+            hideSkeleton(drawings)
+            for _, line in ipairs(drawings.Skeleton.Lines) do line:Destroy() end
+            drawings.Skeleton = {Lines = {}, Bones = {}, RigType = nil}
+        end
 
-	addConnection(player, player.CharacterRemoving:Connect(function()
-        local data = trackedPlayers[player]
-        if data then
-            data.Character = nil
-            data.Head = nil
-            data.Root = nil
-            data.RigType = nil
-            data.Humanoid = nil
+        local function valid()
+            return trackedPlayers[player] == data
+                and data.Generation == generation
+                and player.Character == char
+                and char.Parent ~= nil
+        end
 
-            local drawings = espDrawings[player]
-            if drawings then
-                hideSkeleton(drawings)
+        local function refreshParts()
+            if not valid() then return end
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local head = char:FindFirstChild("Head")
+            local root = char:FindFirstChild("HumanoidRootPart")
+                or (humanoid and humanoid.RootPart) or head
+            data.Head = head and head:IsA("BasePart") and head or nil
+            data.Humanoid = humanoid
+            data.Root = root and root:IsA("BasePart") and root or nil
+            if data.Root then
+                local current = espDrawings[player]
+                if current then current.Highlight.Adornee = char end
             end
+            refreshSkeleton(char)
+        end
+
+        table.insert(data.CharacterConnections, char.ChildAdded:Connect(refreshParts))
+        table.insert(data.CharacterConnections, char.ChildRemoved:Connect(refreshParts))
+        refreshParts()
+
+        task.spawn(function()
+            while valid() and not data.Root do
+                refreshParts()
+                task.wait(0.1)
+            end
+        end)
+    end
+
+    addConnection(player, player.CharacterAdded:Connect(onCharacter))
+    addConnection(player, player.CharacterRemoving:Connect(function(char)
+        if data.Character ~= char then return end
+        data.Generation += 1
+        clearCharacterConnections()
+        data.Character, data.Head, data.Root = nil, nil, nil
+        data.Humanoid, data.RigType = nil, nil
+        local drawings = espDrawings[player]
+        if drawings then
+            drawings.Highlight.Adornee = nil
+            hideSkeleton(drawings)
         end
     end))
-
+    if player.Character then onCharacter(player.Character) end
 end
 
 local function untrackPlayer(player)
     local data = trackedPlayers[player]
-    if not data then return end
-
-    for i, c in ipairs(data.Connections) do
-        c:Disconnect()
+    if not data then
+        if espDrawings[player] then removeESP(player) end
+        return
     end
-        
-    data.Connections = nil
-    removeESP(player)
+    
+    data.Generation += 1
     trackedPlayers[player] = nil
+    for _, conn in ipairs(data.Connections) do conn:Disconnect() end
+    for _, conn in ipairs(data.CharacterConnections) do conn:Disconnect() end
+    table.clear(data.Connections)
+    table.clear(data.CharacterConnections)
+    removeESP(player)
 end
 
+local function retrackPlayer(player)
+    if player == localplr or player.Parent ~= Players then return end
+    untrackPlayer(player)
+    trackPlayer(player)
+end
+
+local function retrackAllPlayers()
+    for _, player in ipairs(Players:GetPlayers()) do
+        retrackPlayer(player)
+    end
+end
 
 for _, p in ipairs(Players:GetPlayers()) do
 	trackPlayer(p)
@@ -615,20 +658,94 @@ for i, frame in scpTeams:GetChildren() do
 end
 
 
-local wca = workspace.ChildAdded:Connect(function(child)
-    if not iesp or not noshyguy then return end
-	if iesp then
-        find(child)
+local function coverFacePoint(facepoint)
+    if not noshyguy or not facepoint:IsA("BasePart") or shyCovers[facepoint] then return end
+    local cover = Instance.new("Part")
+    cover.Name = "Local096FaceCover"
+    cover.Size = facepoint.Size * Vector3.new(1.1, 1.1, 1.1)
+    cover.CFrame = facepoint.CFrame
+    cover.Color = Color3.fromRGB(255, 220, 0)
+    cover.Material = Enum.Material.Neon
+    cover.Transparency = 0.5
+    cover.Anchored = false
+    cover.CanCollide = false
+    cover.CanTouch = false
+    cover.CanQuery = true
+    cover.Massless = true
+    cover.Parent = facepoint.Parent
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = facepoint
+    weld.Part1 = cover
+    weld.Parent = cover
+    shyCovers[facepoint] = cover
+end
+
+local function clearShyCovers()
+    for facepoint, cover in pairs(shyCovers) do
+        if cover then cover:Destroy() end
+        shyCovers[facepoint] = nil
     end
-	if noshyguy and child:IsA("Model") then
-        local facepoint = child:FindFirstChild("FacePoint", true)
-        if facepoint then
-            facepoint:Destroy()
-            notif("SCP-096 can no longer be angered.", "SCP-096 Detected")
+end
+
+local function markRoomPart(handle)
+    if not roomESPEnabled or not exit(handle) or handle:FindFirstChild("LocalRoomESPBox") then return end
+    local b = Instance.new("BoxHandleAdornment")
+    b.Name = "LocalRoomESPBox"
+    b.Size = handle.Size
+    b.Parent = handle
+    b.Adornee = handle
+    b.AlwaysOnTop = true
+    b.ZIndex = 10
+    b.Transparency = .5
+    b.Color3 = (handle.Parent.Name == "049" or handle.Parent.Name == "Warhead" or handle.Parent.Name == "914" or handle.Parent.Name == "106") and Color3.fromRGB(255,255,0) or Color3.fromRGB(255,255,255)
+    table.insert(exitelem, b)
+    local ui = Instance.new("BillboardGui")
+    ui.Name = "LocalRoomESPLabel"
+    ui.Parent = handle
+    ui.Adornee = handle
+    ui.Size = UDim2.fromScale(10, 2.5)
+    ui.AlwaysOnTop = true
+    local label = Instance.new("TextLabel")
+    label.Parent = ui
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.fromScale(1, 1)
+    label.TextScaled = true
+    label.RichText = true
+    label.Text = handle.Parent.Name
+    table.insert(exitelem, ui)
+end
+
+local function scanRoomParts()
+    for _, child in ipairs(workspace:GetDescendants()) do
+        if child:IsA("BasePart") and (child.Name == "Front" or child.Name == "HCZ") then
+            markRoomPart(child)
         end
-	end
+    end
+end
+
+local wca = workspace.ChildAdded:Connect(function(child)
+    if iesp then find(child) end
 end)
 table.insert(endconnections, wca)
+
+local descendantAdded = workspace.DescendantAdded:Connect(function(child)
+    if iesp then
+        if child:IsA("Tool") then
+            task.defer(function() if iesp and child:IsDescendantOf(workspace) then find(child) end end)
+        elseif child.Name == "Handle" and child.Parent and child.Parent:IsA("Tool") then
+            task.defer(function() if iesp then find(child.Parent) end end)
+        end
+    end
+    if noshyguy and child.Name == "FacePoint" then
+        task.defer(function() coverFacePoint(child) end)
+    end
+    
+    if roomESPEnabled and child:IsA("BasePart")
+        and (child.Name == "Front" or child.Name == "HCZ") then
+        markRoomPart(child)
+    end
+end)
+table.insert(endconnections, descendantAdded)
 
 local nukeframe
 local disabled
@@ -708,16 +825,9 @@ visualTab:CreateDropdown({
 })
 visualTab:CreateButton({
     Name = "Reload ESP",
-    Callback = function(Value)
-        for _, p in Players:GetPlayers() do
-            task.spawn(function()
-                print(p)
-                removeESP(p)
-                task.delay(#Players:GetPlayers() / 10, function()
-                    createESP(p)
-                end)
-            end)
-        end
+    Callback = function()
+        retrackAllPlayers()
+        notif("Player ESP tracking reinitialized.", "ESP Reloaded")
     end
 })
 
@@ -765,50 +875,11 @@ local findRooms = visualTab:CreateToggle({
     Name = "Find checkpoints, elevators, and gates",
     CurrentValue = false,
     Callback = function(Value)
-        if Value == true then
+        roomESPEnabled = Value
+        if Value then
             notif("Finding checkpoints, elevators, and gates.")
-            task.wait(.2)
-            for i, child in workspace:GetDescendants() do
-        	    if exit(child) then
-        		    local handle = child
-            		for i, v in handle:GetChildren() do
-                        if v:IsA("BoxHandleAdornment") or v:IsA("BillboardGui") then
-                            v:Destroy()
-                        end
-                   end
-
-            		local b = Instance.new("BoxHandleAdornment")
-             		b.Size = handle.Size
-             		b.Parent = handle
-        	    	b.Adornee = handle
-        	    	b.AlwaysOnTop = true
-        	    	b.ZIndex = 10
-	            	b.Transparency = .5
-                    table.insert(exitelem, b)
-
-        	    	if handle.Parent.Name == "049" or handle.Parent.Name == "Warhead" or handle.Parent.Name == "914" or handle.Parent.Name == "106" then
-        		    	b.Color3 = Color3.new(255, 255, 0)
-        	    	end
-
-                    local ui = Instance.new("BillboardGui")
-                    ui.Parent = handle
-                    ui.Adornee = handle
-                    ui.Size = UDim2.fromScale(10,2.5)
-                    ui.AlwaysOnTop = true
-                    local textlabel = Instance.new("TextLabel")
-                    textlabel.Parent = ui
-                    textlabel.BackgroundTransparency = 1
-                    textlabel.Size = UDim2.fromScale(1,1)
-                    textlabel.TextScaled = true
-                    textlabel.RichText = true
-                    textlabel.Text = handle.Parent.Name
-
-                    table.insert(exitelem, ui)
-	            end
-            end
-
+            scanRoomParts()
             notif("Found.")
-
         else
             for i, child in pairs(exitelem) do
                 child:Destroy()
@@ -852,14 +923,34 @@ local visd = visualTab:CreateToggle({
     end
 })
 
-local fullbright = visualTab:CreateButton({
+local function applyFullbright()
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+end
+
+local fullbright = visualTab:CreateToggle({
     Name = "Fullbright",
-    Callback = function()
-        Lighting.Brightness = 2
-	    Lighting.ClockTime = 14
-	    Lighting.FogEnd = 100000
-	    Lighting.GlobalShadows = false
-	    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+    CurrentValue = false,
+    Callback = function(Value)
+        fullbrightEnabled = Value
+        if Value then
+            originalLighting = {
+                Brightness = Lighting.Brightness,
+                ClockTime = Lighting.ClockTime,
+                FogEnd = Lighting.FogEnd,
+                GlobalShadows = Lighting.GlobalShadows,
+                OutdoorAmbient = Lighting.OutdoorAmbient
+            }
+            applyFullbright()
+        elseif originalLighting then
+            for property, value in pairs(originalLighting) do
+                Lighting[property] = value
+            end
+            originalLighting = nil
+        end
     end
 })
 
@@ -979,13 +1070,12 @@ local noShyGuy = mainTab:CreateToggle({
     CurrentValue = false,
     Callback = function(Value)
         noshyguy = Value
-        if Value == true then
-            for i, d in workspace:GetDescendants() do
-				if d.Name == "FacePoint" then
-					d:Destroy()
-					notif("SCP-096 can no longer be angered.", "SCP-096 Detected")
-				end
-			end
+        if Value then
+            for _, d in ipairs(workspace:GetDescendants()) do
+                if d.Name == "FacePoint" then coverFacePoint(d) end
+            end
+        else
+            clearShyCovers()
         end
     end
 })
@@ -1452,6 +1542,7 @@ local function destroyrayfield()
     print("no flash off")
 
     noShyGuy:Set(false)
+    fullbright:Set(false)
     print("no shy guy off")
     
     toggleaimbot:Set({})
@@ -1461,6 +1552,10 @@ local function destroyrayfield()
     print("aimbot fully off")
 
     espd:Set({})
+
+    for player in pairs(trackedPlayers) do
+        untrackPlayer(player)
+    end
 
     local n = 0
     for i, drawings in pairs(espDrawings) do
@@ -1664,7 +1759,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         local drawings = espDrawings[player]
         local dist: number = root and math.floor((camPos - root.Position).Magnitude * 10 + .5) / 10
 
-        if not drawings or not char or isDead(player) or (root and dist and dist > 750) then
+        if not drawings or not char or not root or isDead(player) or (dist and dist > 750) then
             if drawings then
                 drawings.Line.Visible = false
                 drawings.Name.Visible = false
@@ -1758,7 +1853,8 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             elseif tracerOption == "From Mouse" then 
                 drawings.Line.From = reticle.Position
             elseif tracerOption == "From Character" then
-                local r = getRoot(getChar(localplr))
+                local localChar = localplr.Character
+                local r = localChar and (localChar:FindFirstChild("HumanoidRootPart") or localChar:FindFirstChild("Head"))
                 if r then
                     local rp, v = Camera:WorldToViewportPoint(r.Position)
 
@@ -1856,7 +1952,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             if now - drawings._lastHpUpdate > hRATE then
                 drawings._lastHpUpdate = now
 
-                local curHp = h:GetAttribute("Health") or 0
+                local curHp = h and h:GetAttribute("Health") or 0
                 local newHp = curHp and math.floor(curHp * 10 + .5) / 10
 
                 if not drawings._lastHp or math.abs(drawings._lastHp - newHp) >= .1 then
@@ -1875,6 +1971,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
 end)
 
 RunService:BindToRenderStep("Reticle", Enum.RenderPriority.Last.Value, function()
+    if fullbrightEnabled then applyFullbright() end
     local mpos = UserInputService:GetMouseLocation()
 
     reticle.Position = Vector2.new(mpos.X, mpos.Y)
