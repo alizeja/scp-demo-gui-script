@@ -368,6 +368,7 @@ local function createESP(player)
     drawings.Health.Color = Color3.new(1,1,1)
     drawings._lastHp = nil
     drawings._lastHpUpdate = 0
+    drawings._lastShield = nil
 
     espDrawings[player] = drawings
 end
@@ -1969,17 +1970,18 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
                 local withShieldText = nil
                 local curHp = h and h:GetAttribute("Health") or 0
                 local newHp = curHp and math.floor(curHp * 10 + .5) / 10
+                local curShield = h and h:GetAttribute("Shield")
+                local newShield = curShield and math.floor(curShield * 10 + .5) / 10
 
-                if h and h:GetAttribute("Shield") then
-                    withShieldText = string.format(
-                        hSuffix..newHp.." + %.1f",
-                        h:GetAttribute("Shield")
-                    )
+                if newShield and newShield > 0 then
+                    withShieldText = hSuffix..newHp.." + "..newShield
                 end
 
-                if not drawings._lastHp or math.abs(drawings._lastHp - newHp) >= .1 then
+                if not drawings._lastHp or math.abs(drawings._lastHp - newHp) >= .1 or drawings._lastShield ~= newShield then
                     drawings._lastHp = newHp
-                    drawings.Health.Text = withShieldText ~= nil and withShieldText or hSuffix..newHp
+                    drawings._lastShield = newShield
+
+                    drawings.Health.Text = withShieldText or hSuffix..newHp
                 end
             end
 
