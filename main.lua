@@ -52,6 +52,17 @@ local iesp = false
 local noshyguy = false
 local fullbrightEnabled = false
 local roomESPEnabled = false
+local debugViewEnabled = false
+local scriptDestroying = false
+local teleportDropdown
+local teleportBusy = false
+local activeTeleportTween
+local teleportSelectionReset = false
+local teleportRefreshQueued = false
+local roomParts = {}
+local roomMarkers = {}
+local specialRoomModels = {}
+local debugParts = {}
 local shyCovers = {}
 local originalLighting = nil
 local fastoldman = false
@@ -72,7 +83,6 @@ local getclosestheadloopactive = true
 
 local espDrawings = {}
 local espelem = {}
-local exitelem = {}
 local R15Bones = {
     {"Head", "UpperTorso"},
     {"UpperTorso", "LowerTorso"},
@@ -216,8 +226,7 @@ local function makefast(char)
 
     table.insert(localCharConnections, hc)
 end
-local lpca = localplr.CharacterAdded:Connect(makefast)
-table.insert(localCharConnections, lpca)
+table.insert(localCharConnections, localplr.CharacterAdded:Connect(makefast))
 
 local function find(child)
     if not child then return end --how no child
@@ -294,8 +303,30 @@ local function find(child)
 	end
 end
 
+local roomNames = {
+    CheckptA = true, CheckptB = true, ["914"] = true,
+    ["South HCZ-EZ Checkpoint"] = true, ["North HCZ-EZ Checkpoint"] = true,
+    GateA = true, GateB = true, Warhead = true, ["049"] = true,
+    ["106"] = true, Armory = true, HID = true, ["Class D Spawn"] = true
+}
+local directRoomNames = {Armory = true, HID = true, ["Class D Spawn"] = true}
 local function exit(child)
-	return (child:IsA("BasePart") and (child.Name == "Front" or child.Name == "HCZ") and (child.Parent.Name == "CheckptA" or child.Parent.Name == "CheckptB" or child.Parent.Name == "914" or child.Parent.Name == "South HCZ-EZ Checkpoint" or child.Parent.Name == "North HCZ-EZ Checkpoint" or child.Parent.Name == "GateA" or child.Parent.Name == "GateB" or child.Parent.Name == "Warhead" or child.Parent.Name == "049" or child.Parent.Name == "106"))
+    if not child or not child:IsA("BasePart") then return false end
+    local parent = child.Parent
+    if not parent then return false end
+    return (roomNames[parent.Name] and (child.Name == "Front" or child.Name == "HCZ"))
+        or directRoomNames[child.Name] == true
+        or (parent:IsA("Model") and directRoomNames[parent.Name] and specialRoomModels[parent] == child)
+end
+
+local function roomDisplayName(part)
+    local parent = part.Parent
+    local name = directRoomNames[part.Name] and part.Name or parent.Name
+    if name == "CheckptA" or name == "CheckptB" or name == "Armory" then
+        local container = directRoomNames[part.Name] and parent or parent.Parent
+        return name .. " (" .. (container and container.Name or "Unknown") .. ")"
+    end
+    return name
 end
 
 local function getBoundingBox(char)
@@ -436,14 +467,18 @@ local function trackPlayer(player)
     local function refreshSkeleton(char)
         local rigType = getRigType(char)
         if not rigType or data.RigType == rigType then return end
+
         data.RigType = rigType
         local drawings = espDrawings[player]
         if not drawings then return end
+
         for _, line in ipairs(drawings.Skeleton.Lines) do
             line:Destroy()
         end
+
         local bones = rigType == "R6" and R6Bones or R15Bones
         drawings.Skeleton = {Lines = {}, Bones = bones, RigType = rigType}
+
         for i = 1, #bones do
             local line = Drawing.new("Line")
             line.Visible = false
@@ -455,9 +490,12 @@ local function trackPlayer(player)
 
     local function onCharacter(char)
         if not char then return end
+
         data.Generation += 1
         local generation = data.Generation
+
         clearCharacterConnections()
+
         data.Character, data.Head, data.Root = char, nil, nil
         data.Humanoid, data.RigType = nil, nil
 
@@ -470,21 +508,20 @@ local function trackPlayer(player)
         end
 
         local function valid()
-            return trackedPlayers[player] == data
-                and data.Generation == generation
-                and player.Character == char
-                and char.Parent ~= nil
+            return trackedPlayers[player] == data and data.Generation == generation and player.Character == char and char.Parent ~= nil
         end
 
         local function refreshParts()
             if not valid() then return end
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
+
+            local humanoid = getHuman(char)
             local head = char:FindFirstChild("Head")
-            local root = char:FindFirstChild("HumanoidRootPart")
-                or (humanoid and humanoid.RootPart) or head
+            local root = getRoot(char)
+
             data.Head = head and head:IsA("BasePart") and head or nil
             data.Humanoid = humanoid
             data.Root = root and root:IsA("BasePart") and root or nil
+
             if data.Root then
                 local current = espDrawings[player]
                 if current then current.Highlight.Adornee = char end
@@ -507,16 +544,20 @@ local function trackPlayer(player)
     addConnection(player, player.CharacterAdded:Connect(onCharacter))
     addConnection(player, player.CharacterRemoving:Connect(function(char)
         if data.Character ~= char then return end
+
         data.Generation += 1
         clearCharacterConnections()
+
         data.Character, data.Head, data.Root = nil, nil, nil
         data.Humanoid, data.RigType = nil, nil
+
         local drawings = espDrawings[player]
         if drawings then
             drawings.Highlight.Adornee = nil
             hideSkeleton(drawings)
         end
     end))
+
     if player.Character then onCharacter(player.Character) end
 end
 
@@ -529,10 +570,13 @@ local function untrackPlayer(player)
     
     data.Generation += 1
     trackedPlayers[player] = nil
+
     for _, conn in ipairs(data.Connections) do conn:Disconnect() end
     for _, conn in ipairs(data.CharacterConnections) do conn:Disconnect() end
+
     table.clear(data.Connections)
     table.clear(data.CharacterConnections)
+    
     removeESP(player)
 end
 
@@ -552,10 +596,8 @@ for _, p in ipairs(Players:GetPlayers()) do
 	trackPlayer(p)
 end
 
-local pac = Players.PlayerAdded:Connect(trackPlayer)
-table.insert(endconnections, pac)
-local prc = Players.PlayerRemoving:Connect(untrackPlayer)
-table.insert(endconnections, prc)
+table.insert(endconnections, Players.PlayerAdded:Connect(trackPlayer))
+table.insert(endconnections, Players.PlayerRemoving:Connect(untrackPlayer))
 
 local function GetClosestHead()
 	local localChar = getChar(localplr)
@@ -693,48 +735,189 @@ local function clearShyCovers()
     end
 end
 
+local presetDestinations = {
+    {"Exit", Vector3.new(51, -1536, 412)},
+    {"MTF Spawn", Vector3.new(-215, -1515, 459)},
+    {"Chaos Insurgency Spawn", Vector3.new(-117, -1527, 27)},
+    {"Warhead", Vector3.new(2, 957, -185)},
+    {"049", Vector3.new(179, 635, -198)},
+    {"Outside Elevator A", Vector3.new(2, -1497, -23)},
+    {"Outside Elevator B", Vector3.new(-112, -1514, 212)},
+    {"Warhead Control", Vector3.new(-90, -1527, 98)}
+}
+
+local presetByName = {}
+local dynamicDestinations = {}
+
+for _, entry in ipairs(presetDestinations) do
+    presetByName[entry[1]] = entry[2]
+end
+
+local function setRoomMarkerVisible(marker, visible)
+    if marker.Box and marker.Box.Parent then marker.Box.Visible = visible end
+    if marker.Label and marker.Label.Parent then marker.Label.Enabled = visible end
+end
+
+local function refreshTeleportOptions()
+    if not teleportDropdown or scriptDestroying then return end
+
+    local options = {}
+
+    for _, entry in ipairs(presetDestinations) do
+        table.insert(options, entry[1])
+    end
+
+    table.clear(dynamicDestinations)
+
+    local names = {}
+    for part in pairs(roomParts) do
+        if part:IsDescendantOf(workspace) and exit(part) then
+            local name = roomDisplayName(part)
+            local baseName = directRoomNames[part.Name] and part.Name or part.Parent.Name
+            if not presetByName[baseName] then
+                table.insert(names, {name = name, part = part})
+            end
+        end
+    end
+
+    table.sort(names, function(a, b)
+        if a.name == b.name then return a.part:GetFullName() < b.part:GetFullName() end
+        return a.name < b.name
+    end)
+
+    local counts = {}
+    for _, entry in ipairs(names) do
+        counts[entry.name] = (counts[entry.name] or 0) + 1
+        local name = entry.name
+        if counts[name] > 1 then name ..= " (" .. counts[name] .. ")" end
+        dynamicDestinations[name] = entry.part
+        table.insert(options, name)
+    end
+
+    teleportDropdown:Refresh(options)
+end
+
+local function queueTeleportRefresh()
+    if teleportRefreshQueued or scriptDestroying then return end
+
+    teleportRefreshQueued = true
+    task.delay(0.2, function()
+        teleportRefreshQueued = false
+
+        if not scriptDestroying then refreshTeleportOptions() end
+    end)
+end
+
+local function unmarkRoomPart(handle)
+    roomParts[handle] = nil
+
+    local marker = roomMarkers[handle]
+    if marker then
+        if marker.Box then marker.Box:Destroy() end
+        if marker.Label then marker.Label:Destroy() end
+        roomMarkers[handle] = nil
+    end
+
+    queueTeleportRefresh()
+end
+
 local function markRoomPart(handle)
-    if not roomESPEnabled or not exit(handle) or handle:FindFirstChild("LocalRoomESPBox") then return end
+    if not handle:IsA("BasePart") or not exit(handle) or roomParts[handle] then return end
+    roomParts[handle] = true
+
     local b = Instance.new("BoxHandleAdornment")
     b.Name = "LocalRoomESPBox"
     b.Size = handle.Size
-    b.Parent = handle
     b.Adornee = handle
     b.AlwaysOnTop = true
     b.ZIndex = 10
     b.Transparency = .5
     b.Color3 = (handle.Parent.Name == "049" or handle.Parent.Name == "Warhead" or handle.Parent.Name == "914" or handle.Parent.Name == "106") and Color3.fromRGB(255,255,0) or Color3.fromRGB(255,255,255)
-    table.insert(exitelem, b)
+    b.Visible = roomESPEnabled
+    b.Parent = handle
+
     local ui = Instance.new("BillboardGui")
     ui.Name = "LocalRoomESPLabel"
-    ui.Parent = handle
     ui.Adornee = handle
     ui.Size = UDim2.fromScale(10, 2.5)
     ui.AlwaysOnTop = true
+    ui.Enabled = roomESPEnabled
+    ui.Parent = handle
+
     local label = Instance.new("TextLabel")
     label.Parent = ui
     label.BackgroundTransparency = 1
     label.Size = UDim2.fromScale(1, 1)
     label.TextScaled = true
     label.RichText = true
-    label.Text = handle.Parent.Name
-    table.insert(exitelem, ui)
+    label.Text = roomDisplayName(handle)
+
+    roomMarkers[handle] = {Box = b, Label = ui}
+    queueTeleportRefresh()
+end
+
+local function markSpecialModel(model)
+    if not model:IsA("Model") or not directRoomNames[model.Name] or specialRoomModels[model] then return end
+
+    local part = model:FindFirstChild("Front", true) or model:FindFirstChild("HCZ", true) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+    if not part or not part:IsA("BasePart") then return end
+
+    if part.Parent == model then
+        specialRoomModels[model] = part
+        markRoomPart(part)
+    end
 end
 
 local function scanRoomParts()
     for _, child in ipairs(workspace:GetDescendants()) do
-        if child:IsA("BasePart") and (child.Name == "Front" or child.Name == "HCZ") then
+        if child:IsA("Model") and directRoomNames[child.Name] then markSpecialModel(child) end
+
+        if child:IsA("BasePart") and (child.Name == "Front" or child.Name == "HCZ" or directRoomNames[child.Name]) then
             markRoomPart(child)
         end
     end
 end
 
-local wca = workspace.ChildAdded:Connect(function(child)
-    if iesp then find(child) end
-end)
-table.insert(endconnections, wca)
+local function markDebugPart(part)
+    if not debugViewEnabled or not part:IsA("BasePart") or debugParts[part] then return end
 
-local descendantAdded = workspace.DescendantAdded:Connect(function(child)
+    local name = part.Name
+    local transparency, color
+
+    if name == "Detector" then
+        if not part:FindFirstChild("TouchInterest") or part.Transparency ~= 1 then return end
+
+        transparency, color = .625, Color3.new(0, 0, 1)
+    elseif name == "Death" then
+        transparency, color = .5, Color3.new(1, 0, 0)
+    elseif name == "InvisCollision" or name == "Barrier" then
+        transparency = .25
+    else
+        return
+    end
+
+    debugParts[part] = {Transparency = part.Transparency, Color = part.Color}
+    part.Transparency = transparency
+
+    if color then part.Color = color end
+end
+
+local function clearDebugParts()
+    for part, original in pairs(debugParts) do
+        if part.Parent then
+            part.Transparency = original.Transparency
+            part.Color = original.Color
+        end
+
+        debugParts[part] = nil
+    end
+end
+
+table.insert(endconnections, workspace.ChildAdded:Connect(function(child)
+    if iesp then find(child) end
+end))
+
+table.insert(endconnections, workspace.DescendantAdded:Connect(function(child)
     if iesp then
         if child:IsA("Tool") then
             task.defer(function() if iesp and child:IsDescendantOf(workspace) then find(child) end end)
@@ -746,12 +929,28 @@ local descendantAdded = workspace.DescendantAdded:Connect(function(child)
         task.defer(function() coverFacePoint(child) end)
     end
     
-    if roomESPEnabled and child:IsA("BasePart")
-        and (child.Name == "Front" or child.Name == "HCZ") then
-        markRoomPart(child)
+    if child:IsA("BasePart") then
+        if child.Name == "Front" or child.Name == "HCZ" or directRoomNames[child.Name] then
+            markRoomPart(child)
+        end
+        if debugViewEnabled then markDebugPart(child) end
+    elseif child:IsA("Model") and directRoomNames[child.Name] then
+        task.defer(function() if child:IsDescendantOf(workspace) then markSpecialModel(child) end end)
+    elseif debugViewEnabled and child.Name == "TouchInterest" then
+        local parent = child.Parent
+        if parent and parent:IsA("BasePart") and parent.Name == "Detector" then
+            task.defer(function() if debugViewEnabled then markDebugPart(parent) end end)
+        end
     end
-end)
-table.insert(endconnections, descendantAdded)
+end))
+table.insert(endconnections, workspace.DescendantRemoving:Connect(function(child)
+    if roomParts[child] then unmarkRoomPart(child) end
+    if specialRoomModels[child] then specialRoomModels[child] = nil end
+    debugParts[child] = nil
+end))
+
+scanRoomParts()
+
 
 local nukeframe
 local disabled
@@ -882,49 +1081,31 @@ local findRooms = visualTab:CreateToggle({
     CurrentValue = false,
     Callback = function(Value)
         roomESPEnabled = Value
-        if Value then
-            notif("Finding checkpoints, elevators, and gates.")
-            scanRoomParts()
-            notif("Found.")
-        else
-            for i, child in pairs(exitelem) do
-                child:Destroy()
-                exitelem[i] = nil
-            end
+
+        for _, marker in pairs(roomMarkers) do
+            setRoomMarkerVisible(marker, Value)
         end
     end
 })
 
-local vd = {}
 local visd = visualTab:CreateToggle({
     Name = "Debug View",
     CurrentValue = false,
     Callback = function(Value)
-        for i, v in vd do
-            v.Transparency = 1
-        end
-        vd = {}
+        debugViewEnabled = Value
+
         if Value then
-            local ds = 0
-            for i, d in workspace:GetDescendants() do
-                if not d:IsA("BasePart") then continue end
-                if d.Name == "Detector" and d:FindFirstChild("TouchInterest") and d.Transparency == 1 then
-                    d.Transparency = .625
-                    d.Color = Color3.new(0,0,1)
-                    ds += 1
-                    table.insert(vd, d)
-                elseif d.Name == "Death" then
-                    d.Transparency = .5
-                    d.Color = Color3.new(1,0,0)
-                    ds += 1
-                   table.insert(vd, d)
-                elseif d.Name == "InvisCollision" or d.Name == "Barrier" then 
-                    d.Transparency = .25
-                    ds += 1
-                    table.insert(vd, d)
+            local count = 0
+            for _, part in ipairs(workspace:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    markDebugPart(part)
                 end
             end
-            notif("Found "..ds.." Parts.")
+
+            for _ in pairs(debugParts) do count += 1 end
+            notif("Found " .. count .. " Parts.")
+        else
+            clearDebugParts()
         end
     end
 })
@@ -989,7 +1170,7 @@ end
 
 local creditslabel = teamTab:CreateLabel(credits.Text)
 
-local queuedsection = teamTab:CreateSection("Queue")
+teamTab:CreateSection("Queue")
 local queuelabel = teamTab:CreateLabel("Queued: None")
 if queuegui.Text == nil or queuegui.Text == "" then
     queuelabel:Set("Queued: None")
@@ -997,7 +1178,7 @@ else
     queuelabel:Set(queuegui.Text)
 end
 
-local playerteamsection = teamTab:CreateSection("Player Teams")
+teamTab:CreateSection("Player Teams")
 local swlabel = teamTab:CreateLabel(
     "End-game Spawn Wave Timer: "..gameStatus:GetAttribute("SpawnWaveTime"),
     nil,
@@ -1019,7 +1200,7 @@ local mtflabel = teamTab:CreateLabel(
 )
 updatelabel(mtfgui, mtflabel, "Mobile Task Force", false)
 
-local scpssection = teamTab:CreateSection("SCPs")
+teamTab:CreateSection("SCPs")
 local shyguylabel = teamTab:CreateLabel(
     "SCP-096 Shy Guy: "..tostring(shyguygui.Timer.Text),
     6652560715,
@@ -1063,6 +1244,76 @@ local peanutlabel = teamTab:CreateLabel(
 )
 updatelabel(peanutgui, peanutlabel, "SCP-173 The Scuplture", true)
 
+local function tweenToDestination(destination)
+    if teleportBusy or scriptDestroying then return end
+
+    local char = localplr.Character
+    if not char then notif("Character is not ready.", "Teleport") return end
+    
+    local human = getHuman(char)
+    local root = getRoot(char, human)
+    if not root or not root:IsA("BasePart") then
+        notif("No valid root or head found.", "Teleport")
+        return
+    end
+
+    teleportBusy = true
+
+    local target = CFrame.new(destination) * root.CFrame.Rotation
+    local tween = TweenService:Create(root, TweenInfo.new(1.25, Enum.EasingStyle.Linear), {CFrame = target})
+    activeTeleportTween = tween
+
+    local completedConnection
+    completedConnection = tween.Completed:Connect(function()
+        if completedConnection then completedConnection:Disconnect() end
+
+        if activeTeleportTween == tween then
+            activeTeleportTween = nil
+            teleportBusy = false
+        end
+
+        tween:Destroy()
+    end)
+
+    tween:Play()
+end
+
+local teleportOptions = {}
+for _, entry in ipairs(presetDestinations) do table.insert(teleportOptions, entry[1]) end
+
+teleportDropdown = mainTab:CreateDropdown({
+    Name = "Teleport",
+    Options = teleportOptions,
+    CurrentOption = nil,
+    MultipleOptions = false,
+    Callback = function(Options)
+        if teleportSelectionReset or teleportBusy or scriptDestroying then return end
+
+        local choice = Options and Options[1]
+        if not choice then return end
+
+        local destination = presetByName[choice]
+        if not destination then
+            local part = dynamicDestinations[choice]
+
+            if part and part:IsDescendantOf(workspace) and exit(part) then
+                destination = part.Position + Vector3.new(0, 4, 0)
+            end
+        end
+
+        teleportSelectionReset = true
+        teleportDropdown:Set({""})
+        teleportSelectionReset = false
+
+        if destination then
+            tweenToDestination(destination)
+        else
+            notif("Destination no longer exists.", "Teleport")
+            queueTeleportRefresh()
+        end
+    end
+})
+refreshTeleportOptions()
 
 local toggleaimbot = mainTab:CreateDropdown({
 	Name = "Aimbot (Buggy)",
@@ -1092,7 +1343,7 @@ local noShyGuy = mainTab:CreateToggle({
     end
 })
 
-local fasterOldMan = mainTab:CreateToggle({
+mainTab:CreateToggle({
 	Name = "Faster 106 Door Movement",
 	CurrentValue = false,
 	Callback = function(Value)
@@ -1101,7 +1352,7 @@ local fasterOldMan = mainTab:CreateToggle({
 	end
 })
 
-local disablefdmg = mainTab:CreateButton({
+mainTab:CreateButton({
     Name = "Disable Fall Damage",
     Callback = function()
         if falldmg then
@@ -1113,16 +1364,16 @@ local disablefdmg = mainTab:CreateButton({
     end
 })
 
-local disableit = mainTab:CreateSection("Disable Fall Damage First!")
+mainTab:CreateSection("Disable Fall Damage First!")
 
-local doireset = mainTab:CreateToggle({
+mainTab:CreateToggle({
 	Name = "Reset After Pressing Buttons Below",
 	CurrentValue = true,
 	Callback = function(Value)
 		resetafter = Value
 	end
 })
-local containhim = mainTab:CreateButton({
+mainTab:CreateButton({
     Name = "Contain SCP-106 Old Man",
     Callback = function()
         local hcz = workspace:FindFirstChild("Heavy Containment Zone")
@@ -1213,7 +1464,7 @@ local nuke = mainTab:CreateButton({
     end
 })
 
-local cancel = mainTab:CreateButton({
+mainTab:CreateButton({
     Name = "Cancel Nuke",
     Callback = function()
         local char = getChar(localplr)
@@ -1249,7 +1500,7 @@ local cancel = mainTab:CreateButton({
         end
     end
 })
-local activate = mainTab:CreateButton({
+mainTab:CreateButton({
     Name = "Activate Nuke",
     Callback = function()
         local char = getChar(localplr)
@@ -1290,7 +1541,7 @@ local activate = mainTab:CreateButton({
     end
 })
 
-local aimbotk = bindsTab:CreateKeybind({
+bindsTab:CreateKeybind({
     Name = "Toggle Aimbot",
     CurrentKeybind = "P",
     HoldToInteract = false,
@@ -1313,7 +1564,7 @@ local aimbotk = bindsTab:CreateKeybind({
     end
 })
 
-local espk = bindsTab:CreateKeybind({
+bindsTab:CreateKeybind({
     Name = "Toggle ESP",
     CurrentKeybind = "O",
     HoldToInteract = false,
@@ -1348,7 +1599,7 @@ local espk = bindsTab:CreateKeybind({
     end
 })
 
-local healk = bindsTab:CreateKeybind({
+bindsTab:CreateKeybind({
     Name = "Quick Heal (Need medkit in inventory)",
     CurrentKeybind = "H",
     HoldToInteract = false,
@@ -1370,7 +1621,7 @@ local healk = bindsTab:CreateKeybind({
     end
 })
 
-local ballk = bindsTab:CreateKeybind({
+bindsTab:CreateKeybind({
     Name = "Quick Ball Throw (Need normal SCP-018 in inventory)",
     CurrentKeybind = "B",
     HoldToInteract = false,
@@ -1393,7 +1644,7 @@ local ballk = bindsTab:CreateKeybind({
     end
 })
 
-local nukesection = mainTab:CreateSection("Nuke Info")
+mainTab:CreateSection("Nuke Info")
 local disabledlabel = mainTab:CreateLabel("NO NUKE INFO")
 if disabled == nil then
     disabledlabel:Set("NO NUKE INFO")
@@ -1406,7 +1657,7 @@ if timeframes == nil then
 else
     timelabel:Set(minone.Text..mintwo.Text..":"..secone.Text..sectwo.Text..":"..milone.Text..miltwo.Text)
 end
-local nukeinfo = mainTab:CreateButton({
+mainTab:CreateButton({
     Name = "Get Nuke Information (for above)",
     Callback = function()
         if getNukeVars() == true then
@@ -1439,7 +1690,7 @@ local nukeinfo = mainTab:CreateButton({
 })
 
 
-local walk = plrTab:CreateSlider({
+plrTab:CreateSlider({
     Name = "Walk Speed",
     Range = {1, 100},
     Increment = 1,
@@ -1454,7 +1705,7 @@ local walk = plrTab:CreateSlider({
     end
 })
 
-local jump = plrTab:CreateSlider({
+plrTab:CreateSlider({
     Name = "Jump Height",
     Range = {1, 50},
     Increment = 1,
@@ -1471,7 +1722,7 @@ local jump = plrTab:CreateSlider({
 
 -----------------------------------------------
 
-local iy = settingsTab:CreateButton({
+settingsTab:CreateButton({
     Name = "Infinite Yield",
     Callback = function()
         loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
@@ -1485,7 +1736,7 @@ local re = settingsTab:CreateButton({
 	end
 })
 
-local rj = settingsTab:CreateButton({
+settingsTab:CreateButton({
     Name = "Rejoin",
     Callback = function()
         notif("Rejoining...")
@@ -1513,6 +1764,22 @@ local function destroyrayfield()
         RunService:UnbindFromRenderStep("Reticle")
         print("reticle unbinded")
     end
+
+    scriptDestroying = true
+    if activeTeleportTween then
+        activeTeleportTween:Cancel()
+        activeTeleportTween = nil
+    end
+    teleportBusy = false
+    clearDebugParts()
+    for part, marker in pairs(roomMarkers) do
+        if marker.Box then marker.Box:Destroy() end
+        if marker.Label then marker.Label:Destroy() end
+        roomMarkers[part] = nil
+        roomParts[part] = nil
+    end
+    table.clear(dynamicDestinations)
+    table.clear(specialRoomModels)
 
     getclosestheadloopactive = false
     print("getclosestheadloopactive while loop set to false")
@@ -1615,14 +1882,14 @@ local function destroyrayfield()
     Rayfield:Destroy()
 end
 
-local destroy = settingsTab:CreateButton({
+settingsTab:CreateButton({
     Name = "Destroy GUI/Panic",
     Callback = function()
 		destroyrayfield()
     end
 })
 
-local rescript = settingsTab:CreateButton({
+settingsTab:CreateButton({
 	Name = "Reload Script",
 	Callback = function()
 		print("Reloading...")
@@ -1637,50 +1904,40 @@ local rescript = settingsTab:CreateButton({
 
 ---------LOOOP and END CONNECTIONS!!!!
 
-local cc = credits:GetPropertyChangedSignal("Text"):Connect(function()
-	creditslabel:Set(credits.Text)
-end)
-table.insert(endconnections, cc)
-local qgc = queuegui:GetPropertyChangedSignal("Text"):Connect(function()
+table.insert(endconnections, credits:GetPropertyChangedSignal("Text"):Connect(function()
+    creditslabel:Set(credits.Text)
+end))
+table.insert(endconnections, queuegui:GetPropertyChangedSignal("Text"):Connect(function()
     if queuegui.Text == nil or queuegui.Text == "" then
         queuelabel:Set("Queued: None")
     else
         queuelabel:Set(queuegui.Text)
     end
-end)
-table.insert(endconnections, qgc)
-local cgc = chaosgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	updatelabel(chaosgui, chaoslabel, "Chaos Insurgency", false)
-end)
-table.insert(endconnections, cgc)
-local mtfgc = mtfgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	updatelabel(mtfgui, mtflabel, "Mobile Task Force", false)
-end)
-table.insert(endconnections, mtfgc)
-local sggc = shyguygui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	updatelabel(shyguygui, shyguylabel, "SCP-096 Shy Guy", true)
-end)
-table.insert(endconnections, sggc)
-local omgc = oldmangui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	updatelabel(oldmangui, oldmanlabel, "SCP-106 Old Man", true)
-end)
-table.insert(endconnections, omgc)
-local pdgc = docgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	updatelabel(docgui, doclabel, "SCP-049 Plague Doctor", true)
-end)
-table.insert(endconnections, pdgc)
-local dgc = doggui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	updatelabel(doggui, doglabel, "SCP-939-53 With Many Voices", true)
-end)
-table.insert(endconnections, dgc)
-local dagc = dogagaingui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
-end)
-table.insert(endconnections, dagc)
-local pgc = peanutgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
-	updatelabel(peanutgui, peanutlabel, "SCP-173 The Sculpture", true)
-end)
-table.insert(endconnections, pgc)
+end))
+table.insert(endconnections, chaosgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    updatelabel(chaosgui, chaoslabel, "Chaos Insurgency", false)
+end))
+table.insert(endconnections, mtfgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    updatelabel(mtfgui, mtflabel, "Mobile Task Force", false)
+end))
+table.insert(endconnections, shyguygui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    updatelabel(shyguygui, shyguylabel, "SCP-096 Shy Guy", true)
+end))
+table.insert(endconnections, oldmangui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    updatelabel(oldmangui, oldmanlabel, "SCP-106 Old Man", true)
+end))
+table.insert(endconnections, docgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    updatelabel(docgui, doclabel, "SCP-049 Plague Doctor", true)
+end))
+table.insert(endconnections, doggui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    updatelabel(doggui, doglabel, "SCP-939-53 With Many Voices", true)
+end))
+table.insert(endconnections, dogagaingui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    updatelabel(dogagaingui, dogagainlabel, "SCP-939-89 With Many Voices", true)
+end))
+table.insert(endconnections, peanutgui.Timer:GetPropertyChangedSignal("Text"):Connect(function()
+    updatelabel(peanutgui, peanutlabel, "SCP-173 The Sculpture", true)
+end))
 table.insert(endconnections, gameStatus:GetAttributeChangedSignal("SpawnWaveTime"):Connect(function()
     swlabel:Set("End-game Spawn Wave Timer: "..gameStatus:GetAttribute("SpawnWaveTime"))
 end))
