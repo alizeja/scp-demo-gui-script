@@ -929,7 +929,7 @@ local function markDebugPart(part)
     elseif name == "Death" then
         transparency, color = .5, Color3.new(1, 0, 0)
     elseif name == "InvisCollision" or name == "Barrier" then
-        transparency = .25
+        transparency = .5
     else
         return
     end
