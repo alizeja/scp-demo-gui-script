@@ -425,8 +425,51 @@ local function removeESP(player)
     espDrawings[player] = nil
 end
 
+local function getScreenEdgePoint(worldPosition, camera)
+    local projected = camera:WorldToViewportPoint(worldPosition)
+    local viewport = camera.ViewportSize
+    local center = viewport * 0.5
+
+    local point = Vector2.new(projected.X, projected.Y)
+
+    -- Flip the projected direction when the target is behind the camera.
+    if projected.Z < 0 then
+        point = center - (point - center)
+    end
+
+    local direction = point - center
+    if direction.Magnitude < 0.001 then
+        return Vector2.new(center.X, 0)
+    end
+
+    local scaleX = math.huge
+    local scaleY = math.huge
+
+    if direction.X > 0 then
+        scaleX = (viewport.X - 2 - center.X) / direction.X
+    elseif direction.X < 0 then
+        scaleX = (2 - center.X) / direction.X
+    end
+
+    if direction.Y > 0 then
+        scaleY = (viewport.Y - 2 - center.Y) / direction.Y
+    elseif direction.Y < 0 then
+        scaleY = (2 - center.Y) / direction.Y
+    end
+
+    local scale = math.min(
+        math.abs(scaleX),
+        math.abs(scaleY)
+    )
+
+    return Vector2.new(
+        math.clamp(center.X + direction.X * scale, 2, viewport.X - 2),
+        math.clamp(center.Y + direction.Y * scale, 2, viewport.Y - 2)
+    )
+end
+
 local circl = Drawing.new("Circle")
-circl.Radius = 200
+circl.Radius = 115
 circl.Visible = false
 circl.Thickness = 2
 circl.Color = Color3.new(0,0,1)
@@ -599,57 +642,52 @@ end
 table.insert(endconnections, Players.PlayerAdded:Connect(trackPlayer))
 table.insert(endconnections, Players.PlayerRemoving:Connect(untrackPlayer))
 
-local function GetClosestHead()
-	local localChar = getChar(localplr)
-	if not localChar then return nil end
+local function getAimPart(data)
+    local char = data.Character
+    if not char or not char.Parent then return nil end
 
-	local localHead = localChar:FindFirstChild("Head")
-	if not localHead then 
-        localHead = getRoot(localChar)
+    local head = data.Head
+    if head and head:IsDescendantOf(char) then return head end
+
+    -- SCP rigs may have no conventional Head.
+    for _, name in ipairs({"Head", "FacePoint", "HeadMesh", "Mesh", "UpperTorso", "Torso", "HumanoidRootPart"}) do
+        local part = char:FindFirstChild(name, true)
+        if part and part:IsA("BasePart") then return part end
     end
+    if data.Root and data.Root:IsDescendantOf(char) then return data.Root end
+    return char.PrimaryPart or char:FindFirstChildWhichIsA("BasePart", true)
+end
 
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	rayParams.FilterDescendantsInstances = {localChar}
+local function GetClosestHead(previous)
+    local localChar = localplr.Character
+    if not localChar then return nil end
+    local origin = Camera.CFrame.Position
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {localChar}
+    local best, bestDist = nil, circl.Radius
 
-	local closest = nil
-	local dist = circl.Radius
-
-	for player, data in pairs(trackedPlayers) do
-        if not player or not data then continue end
+    for player, data in pairs(trackedPlayers) do
         if filterteam and sameTeam(player) then continue end
-		local head = data.Head
-		local char = data.Character
+        if isDead(player) then continue end
+        local part = getAimPart(data)
+        if not part then continue end
+        local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+        if not onScreen or pos.Z <= 0 then continue end
+        local distance = (Vector2.new(pos.X, pos.Y) - circl.Position).Magnitude
+        if distance > circl.Radius then continue end
 
-		if head and char and not isDead(player) then
-			local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
-			if not onScreen then continue end
+        local delta = part.Position - origin
+        local hit = workspace:Raycast(origin, delta, rayParams)
+        if hit and not hit.Instance:IsDescendantOf(data.Character) then continue end
 
-			local screenPos = Vector2.new(pos.X, pos.Y)
-			local mag = (screenPos - circl.Position).Magnitude
-			if mag > dist then continue end
-
-			local origin = localHead.Position
-			local direction = head.Position - origin
-
-			local result = workspace:Raycast(origin, direction, rayParams)
-
-			local visible = false
-			if result then
-				local hitChar = result.Instance:FindFirstAncestorOfClass("Model")
-				visible = hitChar == char
-			else
-				visible = true
-			end
-
-			if visible then
-				dist = mag
-				closest = head
-			end
-		end
-	end
-
-	return closest
+        -- Small preference for the existing target avoids oscillation between players.
+        local score = distance - ((previous and previous:IsDescendantOf(data.Character)) and 12 or 0)
+        if score < bestDist then
+            bestDist, best = score, part
+        end
+    end
+    return best
 end
 
 local chaosgui
@@ -1278,45 +1316,8 @@ local function tweenToDestination(destination)
     tween:Play()
 end
 
-local teleportOptions = {}
-for _, entry in ipairs(presetDestinations) do table.insert(teleportOptions, entry[1]) end
-
-teleportDropdown = mainTab:CreateDropdown({
-    Name = "Teleport",
-    Options = teleportOptions,
-    CurrentOption = nil,
-    MultipleOptions = false,
-    Callback = function(Options)
-        if teleportSelectionReset or teleportBusy or scriptDestroying then return end
-
-        local choice = Options and Options[1]
-        if not choice then return end
-
-        local destination = presetByName[choice]
-        if not destination then
-            local part = dynamicDestinations[choice]
-
-            if part and part:IsDescendantOf(workspace) and exit(part) then
-                destination = part.Position + Vector3.new(0, 4, 0)
-            end
-        end
-
-        teleportSelectionReset = true
-        teleportDropdown:Set({""})
-        teleportSelectionReset = false
-
-        if destination then
-            tweenToDestination(destination)
-        else
-            notif("Destination no longer exists.", "Teleport")
-            queueTeleportRefresh()
-        end
-    end
-})
-refreshTeleportOptions()
-
 local toggleaimbot = mainTab:CreateDropdown({
-	Name = "Aimbot (Buggy)",
+	Name = "Aimbot",
 	Options = {"Toggle", "Filter Team", "Filter Class D/Scientist", "Circle"},
 	CurrentOption = {"Filter Team", "Filter Class D/Scientist"},
 	MultipleOptions = true,
@@ -1365,6 +1366,43 @@ mainTab:CreateButton({
 })
 
 mainTab:CreateSection("Disable Fall Damage First!")
+
+local teleportOptions = {}
+for _, entry in ipairs(presetDestinations) do table.insert(teleportOptions, entry[1]) end
+
+teleportDropdown = mainTab:CreateDropdown({
+    Name = "Teleport",
+    Options = teleportOptions,
+    CurrentOption = nil,
+    MultipleOptions = false,
+    Callback = function(Options)
+        if teleportSelectionReset or teleportBusy or scriptDestroying then return end
+
+        local choice = Options and Options[1]
+        if not choice then return end
+
+        local destination = presetByName[choice]
+        if not destination then
+            local part = dynamicDestinations[choice]
+
+            if part and part:IsDescendantOf(workspace) and exit(part) then
+                destination = part.Position + Vector3.new(0, 4, 0)
+            end
+        end
+
+        teleportSelectionReset = true
+        teleportDropdown:Set({""})
+        teleportSelectionReset = false
+
+        if destination then
+            tweenToDestination(destination)
+        else
+            notif("Destination no longer exists.", "Teleport")
+            queueTeleportRefresh()
+        end
+    end
+})
+refreshTeleportOptions()
 
 mainTab:CreateToggle({
 	Name = "Reset After Pressing Buttons Below",
@@ -1943,49 +1981,69 @@ table.insert(endconnections, gameStatus:GetAttributeChangedSignal("SpawnWaveTime
 end))
 
 
+-- Input-driven aim assist: custom camera controllers own Camera.CFrame.
+-- Move the mouse instead of fighting the camera controller every frame.
 local currentTarget = nil
-local dz = .004
+local aimResponse = 13
+local aimMaxPixelsPerSecond = 1800
+local aimDeadzonePixels = 2
+local aimMouseRemainder = Vector2.zero
+local aimMouseMover = mousemoverel
 
 task.spawn(function()
     while getclosestheadloopactive do
         if silentaimbot then
-            currentTarget = GetClosestHead()
+            currentTarget = GetClosestHead(currentTarget)
         else
             currentTarget = nil
         end
 
-        task.wait(0.05)
+        task.wait(0.03)
     end
 end)
 
-RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, function(dt)
-    circl.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Last.Value - 1, function(dt)
+    Camera = workspace.CurrentCamera or Camera
+    circl.Position = Camera.ViewportSize * 0.5
 
-    if not silentaimbot or not currentTarget then
+    if UserInputService.MouseBehavior ~= Enum.MouseBehavior.LockCenter then
+        currentTarget = nil
+        aimMouseRemainder = Vector2.zero
+        return
+    end
+    
+    if not silentaimbot or not currentTarget or not currentTarget.Parent then
+        aimMouseRemainder = Vector2.zero
         return
     end
 
-    local camCF = Camera.CFrame
-    local camPos = camCF.Position
+    local targetPos = currentTarget.Position
+    local projected, onScreen = Camera:WorldToViewportPoint(targetPos)
+    if not onScreen or projected.Z <= 0 then return end
 
-    local velocity = currentTarget.AssemblyLinearVelocity
-    local predictedPos = currentTarget.Position + velocity * 0.05
-
-    local targetDir = (predictedPos - camPos).Unit
-    local currentDir = camCF.LookVector
-
-    local diff = (targetDir - currentDir).Magnitude
-    if diff < dz then return end
-
-    if diff < 0.125 then
-        Camera.CFrame = CFrame.new(camPos, currentTarget.Position)
+    -- Read where the custom camera is actually pointing; no competing CFrame.
+    local center = Camera.ViewportSize * 0.5
+    local errorPixels = Vector2.new(projected.X, projected.Y) - center
+    local distance = errorPixels.Magnitude
+    if distance <= aimDeadzonePixels then
+        aimMouseRemainder = Vector2.zero
         return
     end
 
-    local alpha = math.clamp(dt * 10, 0, 1)
-    local newDir = currentDir:Lerp(targetDir, alpha)
+    local deltaTime = math.clamp(dt, 0, 0.03)
+    local alpha = 1 - math.exp(-aimResponse * deltaTime)
+    local move = errorPixels * alpha
+    local maxStep = aimMaxPixelsPerSecond * deltaTime
+    if move.Magnitude > maxStep then move = move.Unit * maxStep end
 
-    Camera.CFrame = CFrame.new(camPos, camPos + newDir)
+    -- Keep subpixel precision when the executor accepts integer mouse deltas.
+    move += aimMouseRemainder
+    local dx = math.round(move.X)
+    local dy = math.round(move.Y)
+    aimMouseRemainder = move - Vector2.new(dx, dy)
+    if dx ~= 0 or dy ~= 0 then
+        aimMouseMover(dx, dy)
+    end
 end)
 
 local lastUpdate = 0
@@ -2048,21 +2106,25 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         local bones = rigType == "R6" and R6Bones or R15Bones
 
         local rootPos, onScreen = cam:WorldToViewportPoint(root.Position)
-        local screenPos = Vector2.new(rootPos.X, rootPos.Y)
+        local screenPos
+
+        if onScreen and rootPos.Z > 0 then
+            screenPos = Vector2.new(rootPos.X, rootPos.Y)
+        else
+            screenPos = getScreenEdgePoint(root.Position, cam)
+        end
 
         if not onScreen then
-            drawings.Line.Visible = false
             drawings.Name.Visible = false
             drawings.Box.Visible = false
             drawings.Highlight.Enabled = false
             drawings.Distance.Visible = false
             drawings.Health.Visible = false
             hideSkeleton(drawings)
-            continue
         end
 
 
-        if esp_boxes then
+        if esp_boxes and onScreen then
             local cf, size = getBoundingBox(char)
 
             local corners = {
@@ -2148,7 +2210,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Line.Visible = false
         end
 
-        if esp_hl then
+        if esp_hl and onScreen then
             if not drawings.Highlight.Adornee then
                 drawings.Highlight.Adornee = char
             end
@@ -2167,7 +2229,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Highlight.Enabled = false
         end
         
-        if esp_skeleton and drawings.Skeleton and drawings.Skeleton.Lines then
+        if esp_skeleton and drawings.Skeleton and drawings.Skeleton.Lines and onScreen then
             if dist <= 350 and dist > 10 then
                 local bones = drawings.Skeleton.Bones
                 local lines = drawings.Skeleton.Lines
@@ -2219,7 +2281,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Distance.Visible = false
         end
 
-        if esp_health then
+        if esp_health and onScreen then
             local now = tick()
             if now - drawings._lastHpUpdate > hRATE then
                 drawings._lastHpUpdate = now
