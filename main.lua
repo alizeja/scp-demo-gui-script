@@ -3,9 +3,6 @@
 
 
 
-
-
-
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -103,6 +100,10 @@ local R15Bones = {
     {"LowerTorso", "RightUpperLeg"},
     {"RightUpperLeg", "RightLowerLeg"},
     {"RightLowerLeg", "RightFoot"},
+    {"LeftHand", "LeftHandTip"},
+    {"RightHand", "RightHandTip"},
+    {"LeftFoot", "LeftFootTip"},
+    {"RightFoot", "RightFootTip"},
 }
 local R6Bones = {
     {"Head", "Torso"},
@@ -112,6 +113,10 @@ local R6Bones = {
     {"Torso", "Right Arm"},
     {"Torso", "Left Leg"},
     {"Torso", "Right Leg"},
+    {"Left Arm", "Left ArmTip"},
+    {"Right Arm", "Right ArmTip"},
+    {"Left Leg", "Left LegTip"},
+    {"Right Leg", "Right LegTip"},
 }
 
 local runLoop
@@ -129,7 +134,6 @@ function notif(text, title, dur)
         Duration = dur or 5
     })
 end
-
 local function getChar(plr)
     return plr.Character or plr.CharacterAdded:Wait()
 end
@@ -425,8 +429,50 @@ local function removeESP(player)
     espDrawings[player] = nil
 end
 
+local function getScreenEdgePoint(worldPosition, camera)
+    local projected = camera:WorldToViewportPoint(worldPosition)
+    local viewport = camera.ViewportSize
+    local center = viewport * 0.5
+
+    local point = Vector2.new(projected.X, projected.Y)
+
+    if projected.Z < 0 then
+        point = center - (point - center)
+    end
+
+    local direction = point - center
+    if direction.Magnitude < 0.001 then
+        return Vector2.new(center.X, 0)
+    end
+
+    local scaleX = math.huge
+    local scaleY = math.huge
+
+    if direction.X > 0 then
+        scaleX = (viewport.X - 2 - center.X) / direction.X
+    elseif direction.X < 0 then
+        scaleX = (2 - center.X) / direction.X
+    end
+
+    if direction.Y > 0 then
+        scaleY = (viewport.Y - 2 - center.Y) / direction.Y
+    elseif direction.Y < 0 then
+        scaleY = (2 - center.Y) / direction.Y
+    end
+
+    local scale = math.min(
+        math.abs(scaleX),
+        math.abs(scaleY)
+    )
+
+    return Vector2.new(
+        math.clamp(center.X + direction.X * scale, 2, viewport.X - 2),
+        math.clamp(center.Y + direction.Y * scale, 2, viewport.Y - 2)
+    )
+end
+
 local circl = Drawing.new("Circle")
-circl.Radius = 200
+circl.Radius = 125
 circl.Visible = false
 circl.Thickness = 2
 circl.Color = Color3.new(0,0,1)
@@ -477,7 +523,13 @@ local function trackPlayer(player)
         end
 
         local bones = rigType == "R6" and R6Bones or R15Bones
-        drawings.Skeleton = {Lines = {}, Bones = bones, RigType = rigType}
+        local joints = {}
+        for _, descendant in ipairs(char:GetDescendants()) do
+            if descendant:IsA("Motor6D") and descendant.Part1 and descendant.Part0 then
+                joints[descendant.Part1.Name] = descendant
+            end
+        end
+        drawings.Skeleton = {Lines = {}, Bones = bones, RigType = rigType, Joints = joints}
 
         for i = 1, #bones do
             local line = Drawing.new("Line")
@@ -599,57 +651,54 @@ end
 table.insert(endconnections, Players.PlayerAdded:Connect(trackPlayer))
 table.insert(endconnections, Players.PlayerRemoving:Connect(untrackPlayer))
 
-local function GetClosestHead()
-	local localChar = getChar(localplr)
-	if not localChar then return nil end
+local function getAimPart(data)
+    local char = data.Character
+    if not char or not char.Parent then return nil end
 
-	local localHead = localChar:FindFirstChild("Head")
-	if not localHead then 
-        localHead = getRoot(localChar)
+    local head = data.Head
+    if head and head:IsDescendantOf(char) then return head end
+
+    for _, name in ipairs({"Head", "FacePoint", "HeadMesh", "Mesh", "UpperTorso", "Torso", "HumanoidRootPart"}) do
+        local part = char:FindFirstChild(name, true)
+        if part and part:IsA("BasePart") then return part end
     end
 
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	rayParams.FilterDescendantsInstances = {localChar}
+    if data.Root and data.Root:IsDescendantOf(char) then return data.Root end
+    return char.PrimaryPart or char:FindFirstChildWhichIsA("BasePart", true)
+end
 
-	local closest = nil
-	local dist = circl.Radius
+local function GetClosestHead(previous)
+    local localChar = localplr.Character
+    if not localChar then return nil end
+    local origin = Camera.CFrame.Position
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {localChar}
+    local best, bestDist = nil, circl.Radius
 
-	for player, data in pairs(trackedPlayers) do
-        if not player or not data then continue end
+    for player, data in pairs(trackedPlayers) do
         if filterteam and sameTeam(player) then continue end
-		local head = data.Head
-		local char = data.Character
+        if isDead(player) then continue end
 
-		if head and char and not isDead(player) then
-			local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
-			if not onScreen then continue end
+        local part = getAimPart(data)
+        if not part then continue end
 
-			local screenPos = Vector2.new(pos.X, pos.Y)
-			local mag = (screenPos - circl.Position).Magnitude
-			if mag > dist then continue end
+        local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+        if not onScreen or pos.Z <= 0 then continue end
 
-			local origin = localHead.Position
-			local direction = head.Position - origin
+        local distance = (Vector2.new(pos.X, pos.Y) - circl.Position).Magnitude
+        if distance > circl.Radius then continue end
 
-			local result = workspace:Raycast(origin, direction, rayParams)
+        local delta = part.Position - origin
+        local hit = workspace:Raycast(origin, delta, rayParams)
+        if hit and not hit.Instance:IsDescendantOf(data.Character) then continue end
 
-			local visible = false
-			if result then
-				local hitChar = result.Instance:FindFirstAncestorOfClass("Model")
-				visible = hitChar == char
-			else
-				visible = true
-			end
-
-			if visible then
-				dist = mag
-				closest = head
-			end
-		end
-	end
-
-	return closest
+        local score = distance - ((previous and previous:IsDescendantOf(data.Character)) and 12 or 0)
+        if score < bestDist then
+            bestDist, best = score, part
+        end
+    end
+    return best
 end
 
 local chaosgui
@@ -878,6 +927,157 @@ local function scanRoomParts()
     end
 end
 
+
+local roomPathEnabled = false
+local roomPathBridges = {}
+local roomPathRefreshQueued = false
+local roomPathFolder = Instance.new("Folder")
+roomPathFolder.Name = "LocalRoomPaths"
+roomPathFolder.Parent = workspace.CurrentCamera
+
+local function clearRoomPaths()
+    for model, bridges in pairs(roomPathBridges) do
+        for _, anchor in ipairs(bridges) do anchor:Destroy() end
+        roomPathBridges[model] = nil
+    end
+end
+
+local function createRoomBridge(model, fromPos, toPos)
+    local difference = toPos - fromPos
+    if difference.Magnitude < 0.1 then return end
+
+    local anchor = Instance.new("Part")
+    anchor.Name = "RoomPathBridge"
+    anchor.Anchored = true
+    anchor.CanCollide = false
+    anchor.CanTouch = false
+    anchor.CanQuery = false
+    anchor.Transparency = 1
+    anchor.Size = Vector3.new(0.45, 0.45, difference.Magnitude)
+    anchor.CFrame = CFrame.lookAt((fromPos + toPos) * 0.5, toPos)
+    anchor.Parent = roomPathFolder
+
+    local box = Instance.new("BoxHandleAdornment")
+    box.Name = "PathOutline"
+    box.Adornee = anchor
+    box.Size = anchor.Size
+    box.AlwaysOnTop = true
+    box.ZIndex = 5
+    box.Color3 = Color3.fromRGB(0, 210, 255)
+    box.Transparency = 0.65
+    box.Parent = anchor
+    table.insert(roomPathBridges[model], anchor)
+end
+
+local debugFrontMarkers = {}
+
+local function clearDebugFrontMarkers()
+    for part, marker in pairs(debugFrontMarkers) do
+        marker:Destroy()
+        debugFrontMarkers[part] = nil
+    end
+end
+
+local function markDebugFront(part)
+    if not debugViewEnabled or not part:IsA("BasePart") or part.Name ~= "Front" then return end
+
+    local model = part.Parent
+    if not model or not model:IsA("Model") or roomNames[model.Name] or directRoomNames[model.Name] then return end
+    if not model:IsDescendantOf(workspace) or debugFrontMarkers[part] then return end
+    if roomParts[part] or model:FindFirstChild("Back") or model:FindFirstChild("Right") or model:FindFirstChild("Left") then return end
+
+    local box = Instance.new("BoxHandleAdornment")
+    box.Name = "LocalDebugFrontBox"
+    box.Adornee = part
+    box.Size = part.Size
+    box.AlwaysOnTop = true
+    box.ZIndex = 9
+    box.Transparency = 0.5
+    box.Color3 = Color3.fromRGB(255, 170, 0)
+    box.Parent = part
+    debugFrontMarkers[part] = box
+end
+
+local function refreshDebugFrontMarkers()
+    clearDebugFrontMarkers()
+    if not debugViewEnabled then return end
+
+    for _, item in ipairs(workspace:GetDescendants()) do
+        if item:IsA("BasePart") and item.Name == "Front" then markDebugFront(item) end
+    end
+end
+
+local function rebuildRoomPaths()
+    clearRoomPaths()
+    if not roomPathEnabled or scriptDestroying then return end
+
+    refreshDebugFrontMarkers()
+    for _, model in ipairs(workspace:GetDescendants()) do
+        if not model:IsA("Model") or model == localplr.Character then continue end
+        
+        if model.Name == "South HCZ-EZ Checkpoint" or model.Name == "North HCZ-EZ Checkpoint" then
+            local hczExit = model:FindFirstChild("HCZ")
+            local ezExit = model:FindFirstChild("EZ")
+            if hczExit and hczExit:IsA("BasePart") and ezExit and ezExit:IsA("BasePart") then
+                roomPathBridges[model] = {}
+                createRoomBridge(model, hczExit.Position, ezExit.Position)
+            end
+
+            continue
+        end
+
+        local front = model:FindFirstChild("Front")
+        if not front or not front:IsA("BasePart") then continue end
+
+        local back = model:FindFirstChild("Back")
+        local right = model:FindFirstChild("Right")
+        local left = model:FindFirstChild("Left")
+        back = back and back:IsA("BasePart") and back or nil
+        right = right and right:IsA("BasePart") and right or nil
+        left = left and left:IsA("BasePart") and left or nil
+
+        if not back and not right and not left then continue end
+        roomPathBridges[model] = {}
+
+        if back then
+            createRoomBridge(model, front.Position, back.Position)
+            local middle = (front.Position + back.Position) * 0.5
+
+            if right and left then
+                createRoomBridge(model, right.Position, left.Position)
+            else
+                if right then createRoomBridge(model, right.Position, middle) end
+                if left then createRoomBridge(model, left.Position, middle) end
+            end
+        elseif right and left then
+            local middle = (right.Position + left.Position) * 0.5
+
+            createRoomBridge(model, right.Position, left.Position)
+            createRoomBridge(model, front.Position, middle)
+        elseif right or left then
+            local side = right or left
+            local forward = front.CFrame.LookVector
+            local delta = side.Position - front.Position
+            local bend = front.Position + forward * delta:Dot(forward)
+
+            bend = Vector3.new(bend.X, (front.Position.Y + side.Position.Y) * 0.5, bend.Z)
+            createRoomBridge(model, front.Position, bend)
+            createRoomBridge(model, bend, side.Position)
+        end
+    end
+end
+
+local function queueRoomPathRefresh()
+    if not roomPathEnabled or roomPathRefreshQueued or scriptDestroying then return end
+
+    roomPathRefreshQueued = true
+    task.delay(0.6, function()
+        roomPathRefreshQueued = false
+
+        if roomPathEnabled and not scriptDestroying then rebuildRoomPaths() end
+    end)
+end
+
 local function markDebugPart(part)
     if not debugViewEnabled or not part:IsA("BasePart") or debugParts[part] then return end
 
@@ -891,7 +1091,7 @@ local function markDebugPart(part)
     elseif name == "Death" then
         transparency, color = .5, Color3.new(1, 0, 0)
     elseif name == "InvisCollision" or name == "Barrier" then
-        transparency = .25
+        transparency = .5
     else
         return
     end
@@ -918,6 +1118,12 @@ table.insert(endconnections, workspace.ChildAdded:Connect(function(child)
 end))
 
 table.insert(endconnections, workspace.DescendantAdded:Connect(function(child)
+    if roomPathEnabled and not child:IsDescendantOf(roomPathFolder) then
+        if (child:IsA("BasePart") and (child.Name == "Front" or child.Name == "Back" or child.Name == "Right" or child.Name == "Left"))
+            or (child:IsA("Model") and child:FindFirstChild("Front")) then
+            queueRoomPathRefresh()
+        end
+    end
     if iesp then
         if child:IsA("Tool") then
             task.defer(function() if iesp and child:IsDescendantOf(workspace) then find(child) end end)
@@ -933,7 +1139,11 @@ table.insert(endconnections, workspace.DescendantAdded:Connect(function(child)
         if child.Name == "Front" or child.Name == "HCZ" or directRoomNames[child.Name] then
             markRoomPart(child)
         end
-        if debugViewEnabled then markDebugPart(child) end
+
+        if debugViewEnabled then
+            markDebugPart(child)
+            if child.Name == "Front" then queueRoomPathRefresh() end
+        end
     elseif child:IsA("Model") and directRoomNames[child.Name] then
         task.defer(function() if child:IsDescendantOf(workspace) then markSpecialModel(child) end end)
     elseif debugViewEnabled and child.Name == "TouchInterest" then
@@ -944,6 +1154,15 @@ table.insert(endconnections, workspace.DescendantAdded:Connect(function(child)
     end
 end))
 table.insert(endconnections, workspace.DescendantRemoving:Connect(function(child)
+    if roomPathEnabled and (roomPathBridges[child] or (child:IsA("BasePart") and (child.Name == "Front" or child.Name == "Back" or child.Name == "Right" or child.Name == "Left"))) then
+        queueRoomPathRefresh()
+    end
+
+    if debugFrontMarkers[child] then
+        debugFrontMarkers[child]:Destroy()
+        debugFrontMarkers[child] = nil
+    end
+
     if roomParts[child] then unmarkRoomPart(child) end
     if specialRoomModels[child] then specialRoomModels[child] = nil end
     debugParts[child] = nil
@@ -1093,6 +1312,8 @@ local visd = visualTab:CreateToggle({
     CurrentValue = false,
     Callback = function(Value)
         debugViewEnabled = Value
+        roomPathEnabled = Value
+        if Value then rebuildRoomPaths() else clearRoomPaths() clearDebugFrontMarkers() end
 
         if Value then
             local count = 0
@@ -1278,45 +1499,8 @@ local function tweenToDestination(destination)
     tween:Play()
 end
 
-local teleportOptions = {}
-for _, entry in ipairs(presetDestinations) do table.insert(teleportOptions, entry[1]) end
-
-teleportDropdown = mainTab:CreateDropdown({
-    Name = "Teleport",
-    Options = teleportOptions,
-    CurrentOption = nil,
-    MultipleOptions = false,
-    Callback = function(Options)
-        if teleportSelectionReset or teleportBusy or scriptDestroying then return end
-
-        local choice = Options and Options[1]
-        if not choice then return end
-
-        local destination = presetByName[choice]
-        if not destination then
-            local part = dynamicDestinations[choice]
-
-            if part and part:IsDescendantOf(workspace) and exit(part) then
-                destination = part.Position + Vector3.new(0, 4, 0)
-            end
-        end
-
-        teleportSelectionReset = true
-        teleportDropdown:Set({""})
-        teleportSelectionReset = false
-
-        if destination then
-            tweenToDestination(destination)
-        else
-            notif("Destination no longer exists.", "Teleport")
-            queueTeleportRefresh()
-        end
-    end
-})
-refreshTeleportOptions()
-
 local toggleaimbot = mainTab:CreateDropdown({
-	Name = "Aimbot (Buggy)",
+	Name = "Aimbot",
 	Options = {"Toggle", "Filter Team", "Filter Class D/Scientist", "Circle"},
 	CurrentOption = {"Filter Team", "Filter Class D/Scientist"},
 	MultipleOptions = true,
@@ -1365,6 +1549,43 @@ mainTab:CreateButton({
 })
 
 mainTab:CreateSection("Disable Fall Damage First!")
+
+local teleportOptions = {}
+for _, entry in ipairs(presetDestinations) do table.insert(teleportOptions, entry[1]) end
+
+teleportDropdown = mainTab:CreateDropdown({
+    Name = "Teleport",
+    Options = teleportOptions,
+    CurrentOption = nil,
+    MultipleOptions = false,
+    Callback = function(Options)
+        if teleportSelectionReset or teleportBusy or scriptDestroying then return end
+
+        local choice = Options and Options[1]
+        if not choice then return end
+
+        local destination = presetByName[choice]
+        if not destination then
+            local part = dynamicDestinations[choice]
+
+            if part and part:IsDescendantOf(workspace) and exit(part) then
+                destination = part.Position + Vector3.new(0, 4, 0)
+            end
+        end
+
+        teleportSelectionReset = true
+        teleportDropdown:Set({""})
+        teleportSelectionReset = false
+
+        if destination then
+            tweenToDestination(destination)
+        else
+            notif("Destination no longer exists.", "Teleport")
+            queueTeleportRefresh()
+        end
+    end
+})
+refreshTeleportOptions()
 
 mainTab:CreateToggle({
 	Name = "Reset After Pressing Buttons Below",
@@ -1690,12 +1911,20 @@ mainTab:CreateButton({
 })
 
 
+local playerMovementSettings = {
+    WalkSpeed = 15,
+    JumpPower = 3,
+    LoopWalkSpeed = false,
+    LoopJumpPower = false
+}
+
 plrTab:CreateSlider({
     Name = "Walk Speed",
     Range = {1, 100},
     Increment = 1,
-    CurrentValue = 15,
+    CurrentValue = playerMovementSettings.WalkSpeed,
     Callback = function(Value)
+        playerMovementSettings.WalkSpeed = Value
         local char = getChar(localplr)
         local humanoid = getHuman(char)
 
@@ -1705,20 +1934,57 @@ plrTab:CreateSlider({
     end
 })
 
+plrTab:CreateToggle({
+    Name = "Loop WalkSpeed",
+    CurrentValue = false,
+    Callback = function(Value)
+        playerMovementSettings.LoopWalkSpeed = Value
+    end
+})
+
 plrTab:CreateSlider({
-    Name = "Jump Height",
+    Name = "Jump Power",
     Range = {1, 50},
     Increment = 1,
-    CurrentValue = 3,
+    CurrentValue = playerMovementSettings.JumpPower,
     Callback = function(Value)
+        playerMovementSettings.JumpPower = Value
         local char = getChar(localplr)
         local humanoid = getHuman(char)
 
         if char and humanoid then
-            humanoid.JumpHeight = Value
+            humanoid.UseJumpPower = true
+            humanoid.JumpPower = Value
         end
     end
 })
+
+plrTab:CreateToggle({
+    Name = "Loop JumpPower",
+    CurrentValue = false,
+    Callback = function(Value)
+        playerMovementSettings.LoopJumpPower = Value
+    end
+})
+
+task.spawn(function()
+    while not scriptDestroying do
+        if playerMovementSettings.LoopWalkSpeed or playerMovementSettings.LoopJumpPower then
+            local char = getChar(localplr)
+            local humanoid = getHuman(char)
+            if char and humanoid then
+                if playerMovementSettings.LoopWalkSpeed then
+                    humanoid.WalkSpeed = playerMovementSettings.WalkSpeed
+                end
+                if playerMovementSettings.LoopJumpPower then
+                    humanoid.UseJumpPower = true
+                    humanoid.JumpPower = playerMovementSettings.JumpPower
+                end
+            end
+        end
+        task.wait(0.1)
+    end
+end)
 
 -----------------------------------------------
 
@@ -1770,8 +2036,15 @@ local function destroyrayfield()
         activeTeleportTween:Cancel()
         activeTeleportTween = nil
     end
+
     teleportBusy = false
+
     clearDebugParts()
+    clearDebugFrontMarkers()
+    roomPathEnabled = false
+    clearRoomPaths()
+    roomPathFolder:Destroy()
+
     for part, marker in pairs(roomMarkers) do
         if marker.Box then marker.Box:Destroy() end
         if marker.Label then marker.Label:Destroy() end
@@ -1942,50 +2215,77 @@ table.insert(endconnections, gameStatus:GetAttributeChangedSignal("SpawnWaveTime
     swlabel:Set("End-game Spawn Wave Timer: "..gameStatus:GetAttribute("SpawnWaveTime"))
 end))
 
-
 local currentTarget = nil
-local dz = .004
+local aimResponse = 13
+local aimMaxPixelsPerSecond = 1800
+local aimDeadzonePixels = 9
+local aimUnlockPixels = 16
+local aimLocked = false
+local aimMouseRemainder = Vector2.zero
+local aimMouseMover = mousemoverel
 
 task.spawn(function()
     while getclosestheadloopactive do
         if silentaimbot then
-            currentTarget = GetClosestHead()
+            currentTarget = GetClosestHead(currentTarget)
         else
             currentTarget = nil
         end
 
-        task.wait(0.05)
+        task.wait(0.03)
     end
 end)
 
-RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Camera.Value + 1, function(dt)
-    circl.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+RunService:BindToRenderStep("Aimbot", Enum.RenderPriority.Last.Value - 1, function(dt)
+    Camera = workspace.CurrentCamera or Camera
+    circl.Position = Camera.ViewportSize * 0.5
 
-    if not silentaimbot or not currentTarget then
+    if UserInputService.MouseBehavior ~= Enum.MouseBehavior.LockCenter then
+        currentTarget = nil
+        aimMouseRemainder = Vector2.zero
+        aimLocked = false
+        return
+    end
+    
+    if not silentaimbot or not currentTarget or not currentTarget.Parent then
+        aimLocked = false
+        aimMouseRemainder = Vector2.zero
         return
     end
 
-    local camCF = Camera.CFrame
-    local camPos = camCF.Position
+    local targetPos = currentTarget.Position
+    local projected, onScreen = Camera:WorldToViewportPoint(targetPos)
+    if not onScreen or projected.Z <= 0 then return end
 
-    local velocity = currentTarget.AssemblyLinearVelocity
-    local predictedPos = currentTarget.Position + velocity * 0.05
-
-    local targetDir = (predictedPos - camPos).Unit
-    local currentDir = camCF.LookVector
-
-    local diff = (targetDir - currentDir).Magnitude
-    if diff < dz then return end
-
-    if diff < 0.125 then
-        Camera.CFrame = CFrame.new(camPos, currentTarget.Position)
+    local center = Camera.ViewportSize * 0.5
+    local errorPixels = Vector2.new(projected.X, projected.Y) - center
+    local distance = errorPixels.Magnitude
+    
+    if aimLocked then
+        if distance <= aimUnlockPixels then
+            aimMouseRemainder = Vector2.zero
+            return
+        end
+        aimLocked = false
+    elseif distance <= aimDeadzonePixels then
+        aimLocked = true
+        aimMouseRemainder = Vector2.zero
         return
     end
 
-    local alpha = math.clamp(dt * 10, 0, 1)
-    local newDir = currentDir:Lerp(targetDir, alpha)
+    local deltaTime = math.clamp(dt, 0, 0.03)
+    local alpha = 1 - math.exp(-aimResponse * deltaTime)
+    local move = errorPixels * alpha
+    local maxStep = aimMaxPixelsPerSecond * deltaTime
+    if move.Magnitude > maxStep then move = move.Unit * maxStep end
 
-    Camera.CFrame = CFrame.new(camPos, camPos + newDir)
+    move += aimMouseRemainder
+    local dx = math.round(move.X)
+    local dy = math.round(move.Y)
+    aimMouseRemainder = move - Vector2.new(dx, dy)
+    if dx ~= 0 or dy ~= 0 then
+        aimMouseMover(dx, dy)
+    end
 end)
 
 local lastUpdate = 0
@@ -2048,21 +2348,25 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
         local bones = rigType == "R6" and R6Bones or R15Bones
 
         local rootPos, onScreen = cam:WorldToViewportPoint(root.Position)
-        local screenPos = Vector2.new(rootPos.X, rootPos.Y)
+        local screenPos
+
+        if onScreen and rootPos.Z > 0 then
+            screenPos = Vector2.new(rootPos.X, rootPos.Y)
+        else
+            screenPos = getScreenEdgePoint(root.Position, cam)
+        end
 
         if not onScreen then
-            drawings.Line.Visible = false
             drawings.Name.Visible = false
             drawings.Box.Visible = false
             drawings.Highlight.Enabled = false
             drawings.Distance.Visible = false
             drawings.Health.Visible = false
             hideSkeleton(drawings)
-            continue
         end
 
 
-        if esp_boxes then
+        if esp_boxes and onScreen then
             local cf, size = getBoundingBox(char)
 
             local corners = {
@@ -2148,7 +2452,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Line.Visible = false
         end
 
-        if esp_hl then
+        if esp_hl and onScreen then
             if not drawings.Highlight.Adornee then
                 drawings.Highlight.Adornee = char
             end
@@ -2167,19 +2471,54 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Highlight.Enabled = false
         end
         
-        if esp_skeleton and drawings.Skeleton and drawings.Skeleton.Lines then
+        if esp_skeleton and drawings.Skeleton and drawings.Skeleton.Lines and onScreen then
             if dist <= 350 and dist > 10 then
                 local bones = drawings.Skeleton.Bones
                 local lines = drawings.Skeleton.Lines
+                local joints = drawings.Skeleton.Joints or {}
 
                 for i, bone in ipairs(bones) do
                     local part0 = char:FindFirstChild(bone[1])
-                    local part1 = char:FindFirstChild(bone[2])
+                    local tip = bone[2]:sub(-3) == "Tip"
+                    local part1 = tip and part0 or char:FindFirstChild(bone[2])
 
                     local line = lines[i]
                     if part0 and part1 and line then
-                        local p0, on0 = cam:WorldToViewportPoint(part0.Position)
-                        local p1, on1 = cam:WorldToViewportPoint(part1.Position)
+                        local joint0 = joints[part0.Name]
+                        local joint1 = joints[part1.Name]
+                        local from = joint0 and joint0.Part0 and (joint0.Part0.CFrame * joint0.C0).Position or part0.Position
+                        local to = joint1 and joint1.Part0 and (joint1.Part0.CFrame * joint1.C0).Position or part1.Position 
+
+                        if part0.Name == "Head" then from = part0.Position end
+                        if part1.Name == "LeftHand" or part1.Name == "RightHand" or part1.Name == "LeftFoot" or part1.Name == "RightFoot" then
+                            to = part1.Position
+                        end
+                        if tip then
+                            local proximal = joint0 and joint0.Part0 and (joint0.Part0.CFrame * joint0.C0).Position or part0.Position
+                            local localJoint = part0.CFrame:PointToObjectSpace(proximal)
+                            local dimensions = part0.Size
+                            local axis, extent = "Y", dimensions.Y * 0.5
+                            local offset = math.abs(localJoint.Y) / math.max(dimensions.Y, 0.001)
+
+                            if math.abs(localJoint.X) / math.max(dimensions.X, 0.001) > offset then
+                                axis, extent = "X", dimensions.X * 0.5
+                                offset = math.abs(localJoint.X) / math.max(dimensions.X, 0.001)
+                            end
+
+                            if math.abs(localJoint.Z) / math.max(dimensions.Z, 0.001) > offset then
+                                axis, extent = "Z", dimensions.Z * 0.5
+                            end
+
+                            local sign = (localJoint[axis] >= 0) and -1 or 1
+                            local endpoint = axis == "X" and Vector3.new(sign * extent, 0, 0)
+                                or axis == "Y" and Vector3.new(0, sign * extent, 0)
+                                or Vector3.new(0, 0, sign * extent)
+
+                            from = proximal
+                            to = part0.CFrame:PointToWorldSpace(endpoint)
+                        end
+                        local p0, on0 = cam:WorldToViewportPoint(from)
+                        local p1, on1 = cam:WorldToViewportPoint(to)
 
                        if on0 and on1 then
                             line.From = Vector2.new(p0.X, p0.Y)
@@ -2219,7 +2558,7 @@ RunService:BindToRenderStep("ESP", Enum.RenderPriority.Camera.Value + 2, functio
             drawings.Distance.Visible = false
         end
 
-        if esp_health then
+        if esp_health and onScreen then
             local now = tick()
             if now - drawings._lastHpUpdate > hRATE then
                 drawings._lastHpUpdate = now
